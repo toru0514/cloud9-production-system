@@ -1,5 +1,9 @@
-import { getProcessStatusItems, listProcesses } from '@/lib/cps/supabase';
-import { ok, handleError } from '@/lib/cps/api';
+import {
+  createProcess,
+  getProcessStatusItems,
+  listProcesses,
+} from '@/lib/cps/supabase';
+import { ok, fail, handleError } from '@/lib/cps/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +14,17 @@ export async function GET(req: Request) {
       return ok(await getProcessStatusItems());
     }
     return ok(await listProcesses());
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    if (!body?.name) return fail('name is required');
+    if (!body?.phase) return fail('phase is required');
+    return ok(await createProcess(body), { status: 201 });
   } catch (e) {
     return handleError(e);
   }

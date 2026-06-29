@@ -21,6 +21,7 @@ import type {
   CpsProduct,
   CpsTask,
   CpsWorkLog,
+  ProcessPhase,
 } from '@/types/cps';
 
 const RECENT_WINDOW_DAYS = 30;
@@ -75,6 +76,65 @@ export async function updateProcess(
   if (idx < 0) throw new Error('process not found');
   db.processes[idx] = { ...db.processes[idx], ...update };
   return db.processes[idx];
+}
+
+export type CreateProcessInput = Partial<CpsProcess> & {
+  name: string;
+  phase: ProcessPhase;
+};
+
+export async function createProcess(
+  input: CreateProcessInput
+): Promise<CpsProcess> {
+  const ts = nowISO();
+  let sort_order = input.sort_order;
+  if (sort_order == null) {
+    const all = await listProcesses();
+    const samePhase = all.filter((p) => p.phase === input.phase);
+    sort_order =
+      (samePhase.length
+        ? Math.max(...samePhase.map((p) => p.sort_order))
+        : Math.max(0, ...all.map((p) => p.sort_order))) + 1;
+  }
+  const row: CpsProcess = {
+    id: mockId('proc'),
+    name: input.name,
+    phase: input.phase,
+    sort_order,
+    standard_minutes: input.standard_minutes ?? null,
+    status: input.status ?? 'normal',
+    description: input.description ?? null,
+    tools: input.tools ?? [],
+    created_at: ts,
+    updated_at: ts,
+  };
+  if (isSupabaseConfigured()) {
+    const { id: _omit, ...insert } = row;
+    void _omit;
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_processes')
+      .insert(insert)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as CpsProcess;
+  }
+  getMockDb().processes.push(row);
+  return row;
+}
+
+export async function deleteProcess(id: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabaseAdmin()
+      .from('cps_processes')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return;
+  }
+  const db = getMockDb();
+  const idx = db.processes.findIndex((p) => p.id === id);
+  if (idx >= 0) db.processes.splice(idx, 1);
 }
 
 /* ============================================================
