@@ -24,6 +24,114 @@ import { toast } from 'sonner';
 type Item = CpsProcessStatusItem;
 const COL_W = 232; // 1 枝（列）の幅 px
 
+interface GridRow {
+  sortOrder: number;
+  backbone: boolean;
+  placed: { item: Item; col: number }[];
+  multi: boolean;
+}
+type ConnSpec =
+  | { type: 'none' | 'center' }
+  | { type: 'fork' | 'merge' | 'internal'; cols: number[] };
+
+// 各段間（gap）のコネクタ仕様を算出。backbone と backbone の間を「区間」とみなし、
+// フォーク（中央→各枝）／枝内（各列を直下）／合流（各枝→中央）を描く。
+function computeConnectors(rows: GridRow[]): ConnSpec[] {
+  const n = rows.length;
+  const specs: ConnSpec[] = Array.from({ length: n + 1 }, () => ({
+    type: 'center' as const,
+  }));
+  let i = 0;
+  while (i < n) {
+    if (rows[i].backbone) {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    const cols = new Set<number>();
+    while (j < n && !rows[j].backbone) {
+      rows[j].placed.forEach((p) => cols.add(p.col));
+      j += 1;
+    }
+    const colArr = [...cols].sort((a, b) => a - b);
+    const startIdx = i;
+    const endIdx = j - 1;
+    const forkAbove = startIdx - 1 >= 0 && rows[startIdx - 1].backbone;
+    const mergeBelow = endIdx + 1 <= n - 1 && rows[endIdx + 1].backbone;
+    specs[startIdx] = forkAbove
+      ? { type: 'fork', cols: colArr }
+      : { type: 'internal', cols: colArr };
+    for (let g = startIdx + 1; g <= endIdx; g++)
+      specs[g] = { type: 'internal', cols: colArr };
+    specs[endIdx + 1] = mergeBelow
+      ? { type: 'merge', cols: colArr }
+      : { type: 'internal', cols: colArr };
+    i = j;
+  }
+  if (rows[0]?.backbone) specs[0] = { type: 'none' };
+  return specs;
+}
+
+function FlowConnector({
+  width,
+  height,
+  totalCols,
+  spec,
+}: {
+  width: number;
+  height: number;
+  totalCols: number;
+  spec: ConnSpec;
+}) {
+  if (spec.type === 'none') return null;
+  const stroke = '#94a3b8';
+  const cx = width / 2;
+  const colX = (c: number) => ((c - 0.5) * width) / totalCols;
+  const paths: string[] = [];
+  const heads: number[] = [];
+
+  if (spec.type === 'center') {
+    paths.push(`M${cx} 0 L${cx} ${height}`);
+    heads.push(cx);
+  } else if (spec.type === 'internal') {
+    spec.cols.forEach((c) => {
+      const x = colX(c);
+      paths.push(`M${x} 0 L${x} ${height}`);
+      heads.push(x);
+    });
+  } else if (spec.type === 'fork') {
+    spec.cols.forEach((c) => {
+      const x = colX(c);
+      paths.push(`M${cx} 0 V${height * 0.4} H${x} V${height}`);
+      heads.push(x);
+    });
+  } else if (spec.type === 'merge') {
+    spec.cols.forEach((c) => {
+      const x = colX(c);
+      paths.push(`M${x} 0 V${height * 0.6} H${cx} V${height}`);
+    });
+    heads.push(cx);
+  }
+
+  return (
+    <svg width={width} height={height} className="pointer-events-none block">
+      <g stroke={stroke} strokeWidth={1.5} fill="none">
+        {paths.map((d, i) => (
+          <path key={i} d={d} />
+        ))}
+      </g>
+      <g fill={stroke}>
+        {heads.map((x, i) => (
+          <polygon
+            key={i}
+            points={`${x - 4},${height - 6} ${x + 4},${height - 6} ${x},${height}`}
+          />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 export function ProcessBoard({ items }: { items: Item[] }) {
   const router = useRouter();
   const [local, setLocal] = useState<Item[]>(items);
@@ -412,23 +520,28 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     );
   };
 
-  /* ---------- 段間 gap（新ステップ挿入） ---------- */
+  /* ---------- 段間 gap（コネクタ描画＋新ステップ挿入） ---------- */
   const Gap = ({
     phase,
     gapIndex,
     width,
+    totalCols,
+    spec,
     top,
   }: {
     phase: ProcessPhase;
     gapIndex: number;
     width: number;
+    totalCols: number;
+    spec: ConnSpec;
     top?: boolean;
   }) => {
     const key = `gap:${phase}:${gapIndex}`;
     const over = overKey === key;
+    const height = top || spec.type === 'none' ? 14 : 30;
     return (
       <div
-        style={{ width, height: top ? 12 : 22 }}
+        style={{ width, height }}
         onDragOver={(e) => {
           e.preventDefault();
           setOverKey(key);
@@ -438,22 +551,20 @@ export function ProcessBoard({ items }: { items: Item[] }) {
           e.preventDefault();
           dropToGap(phase, gapIndex);
         }}
-        className="flex items-center justify-center"
+        className="relative flex items-center justify-center"
       >
-        <div
-          className={cn(
-            'flex items-center justify-center rounded transition-all',
-            over
-              ? 'h-6 w-full border-2 border-dashed border-primary bg-primary/10 text-primary'
-              : 'text-muted-foreground/40'
-          )}
-        >
-          {over ? (
-            <span className="text-[10px] font-medium">ここに新ステップ</span>
-          ) : top ? null : (
-            <span className="text-base leading-none">↓</span>
-          )}
-        </div>
+        {over ? (
+          <div className="flex h-6 w-full items-center justify-center rounded border-2 border-dashed border-primary bg-primary/10 text-[10px] font-medium text-primary">
+            ここに新ステップ
+          </div>
+        ) : (
+          <FlowConnector
+            width={width}
+            height={height}
+            totalCols={totalCols}
+            spec={spec}
+          />
+        )}
       </div>
     );
   };
@@ -469,6 +580,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         {PHASE_ORDER.map((phase, pi) => {
           const grid = buildGrid(local, phase);
           const width = grid.totalCols * COL_W;
+          const connectors = computeConnectors(grid.rows);
           return (
             <div key={phase} className="flex items-stretch gap-3">
               <div className="flex shrink-0 flex-col rounded-xl border bg-muted/30 p-2">
@@ -508,10 +620,23 @@ export function ProcessBoard({ items }: { items: Item[] }) {
                   style={{ minWidth: Math.max(width, COL_W) }}
                 >
                   {grid.rows.length === 0 ? (
-                    <Gap phase={phase} gapIndex={0} width={width} />
+                    <Gap
+                      phase={phase}
+                      gapIndex={0}
+                      width={width}
+                      totalCols={grid.totalCols}
+                      spec={{ type: 'none' }}
+                    />
                   ) : (
                     <>
-                      <Gap phase={phase} gapIndex={0} width={width} top />
+                      <Gap
+                        phase={phase}
+                        gapIndex={0}
+                        width={width}
+                        totalCols={grid.totalCols}
+                        spec={connectors[0]}
+                        top
+                      />
                       {grid.rows.map((row, r) => (
                         <div key={row.sortOrder} style={{ width }}>
                           {row.multi && (
@@ -564,6 +689,8 @@ export function ProcessBoard({ items }: { items: Item[] }) {
                             phase={phase}
                             gapIndex={r + 1}
                             width={width}
+                            totalCols={grid.totalCols}
+                            spec={connectors[r + 1]}
                           />
                         </div>
                       ))}
