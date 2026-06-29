@@ -177,6 +177,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     const src = d.process.phase;
     d.process.phase = phase as ProcessPhase;
     d.process.sort_order = sortOrder;
+    ensureRowRoutes(next, phase, sortOrder);
     renumber(next, phase);
     if (src !== phase) renumber(next, src);
     setLocal(next);
@@ -212,7 +213,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
   };
 
   /* ---------- 構造追加: 直列(同じ枝の下) / 並行(分岐) ---------- */
-  const genRoute = (phase: string, taken: Set<string>) => {
+  const genRoute = (taken: Set<string>) => {
     let n = 1;
     while (taken.has(`枝${n}`)) n += 1;
     const r = `枝${n}`;
@@ -220,25 +221,47 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     return r;
   };
 
+  // 複数ノードの段（並行）になったら、null の枝に識別子を自動付与
+  const ensureRowRoutes = (next: Item[], phase: string, sortOrder: number) => {
+    const row = next.filter(
+      (i) => i.process.phase === phase && i.process.sort_order === sortOrder
+    );
+    if (row.length <= 1) return;
+    const taken = new Set(
+      next
+        .filter((i) => i.process.phase === phase && i.process.route)
+        .map((i) => i.process.route as string)
+    );
+    row.forEach((i) => {
+      if (!i.process.route) i.process.route = genRoute(taken);
+    });
+  };
+
   const addSerial = async (anchor: CpsProcess) => {
     const name = window.prompt(`「${anchor.name}」の下に追加する工程名`);
     if (!name?.trim()) return;
     setBusy(true);
     try {
+      const next = clone();
+      const a = next.find((i) => i.process.id === anchor.id)?.process;
+      if (!a) return;
+      // 並行段なら枝を確定させ、子は同じ枝を引き継ぐ
+      ensureRowRoutes(next, a.phase, a.sort_order);
+      const childRoute = a.route;
+
       const created = await apiSend<CpsProcess>('/api/cps/processes', 'POST', {
         name: name.trim(),
-        phase: anchor.phase,
-        route: anchor.route,
-        sort_order: anchor.sort_order,
+        phase: a.phase,
+        route: childRoute,
+        sort_order: a.sort_order,
       });
-      const next = clone();
       next.push({
-        process: { ...created, sort_order: anchor.sort_order + 0.5 },
+        process: { ...created, route: childRoute, sort_order: a.sort_order + 0.5 },
         recent_avg_minutes: null,
         last_logged_at: null,
         status: 'normal',
       });
-      renumber(next, anchor.phase);
+      renumber(next, a.phase);
       setLocal(next);
       const base = baseFromItems();
       base.set(created.id, created);
@@ -255,31 +278,34 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     if (!name?.trim()) return;
     setBusy(true);
     try {
+      const next = clone();
+      const a = next.find((i) => i.process.id === anchor.id)?.process;
+      if (!a) return;
       const taken = new Set(
-        local
-          .filter((i) => i.process.phase === anchor.phase && i.process.route)
+        next
+          .filter((i) => i.process.phase === a.phase && i.process.route)
           .map((i) => i.process.route as string)
       );
-      const loneBackbone =
-        local.filter(
-          (i) =>
-            i.process.phase === anchor.phase &&
-            i.process.sort_order === anchor.sort_order
-        ).length === 1 && !anchor.route;
-      if (loneBackbone) {
-        const anchorRoute = genRoute(anchor.phase, taken);
-        await apiSend(`/api/cps/processes/${anchor.id}`, 'PATCH', {
-          route: anchorRoute,
-        });
-      }
-      const newRoute = genRoute(anchor.phase, taken);
-      await apiSend('/api/cps/processes', 'POST', {
+      // アンカーが無印（バックボーン）なら枝に変える
+      if (!a.route) a.route = genRoute(taken);
+      const newRoute = genRoute(taken);
+
+      const created = await apiSend<CpsProcess>('/api/cps/processes', 'POST', {
         name: name.trim(),
-        phase: anchor.phase,
+        phase: a.phase,
         route: newRoute,
-        sort_order: anchor.sort_order,
+        sort_order: a.sort_order,
       });
-      router.refresh();
+      next.push({
+        process: { ...created, route: newRoute, sort_order: a.sort_order },
+        recent_avg_minutes: null,
+        last_logged_at: null,
+        status: 'normal',
+      });
+      setLocal(next);
+      const base = baseFromItems();
+      base.set(created.id, created);
+      await persistAll(next, base);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
