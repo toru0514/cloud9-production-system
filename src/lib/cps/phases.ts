@@ -7,6 +7,8 @@ export const PHASE_ORDER: ProcessPhase[] = [
   '梱包材準備',
   '発送',
   '販売',
+  'コンテンツ(写真)',
+  'コンテンツ(動画)',
 ];
 
 export const PHASE_DESC: Record<ProcessPhase, string> = {
@@ -16,5 +18,7 @@ export const PHASE_DESC: Record<ProcessPhase, string> = {
   梱包材準備: '台紙・箱・梱包材を用意する',
   発送: '受注から梱包・発送まで',
   コンテンツ: '撮影・投稿・動画で発信する',
+  'コンテンツ(写真)': '商品写真の撮影・加工・投稿',
+  'コンテンツ(動画)': '動画の台本・生成・編集・アップ',
   販売: '出品・写真・各モール登録・広告',
 };

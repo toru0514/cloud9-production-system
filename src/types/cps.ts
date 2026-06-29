@@ -10,6 +10,8 @@ export type ProcessPhase =
   | '梱包材準備'
   | '発送'
   | 'コンテンツ'
+  | 'コンテンツ(写真)'
+  | 'コンテンツ(動画)'
   | '販売';
 
 export type ProcessStatus = 'normal' | 'caution' | 'stopped';
