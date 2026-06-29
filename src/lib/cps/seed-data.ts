@@ -13,6 +13,7 @@ interface ProcessSeed {
   standard_minutes: number | null;
   tools?: string[];
   description?: string;
+  route?: string | null;
 }
 
 // 仕様書 §12 の工程マスタ
@@ -51,6 +52,7 @@ export function buildSeedProcesses(): CpsProcess[] {
     status: 'normal',
     description: s.description ?? null,
     tools: s.tools ?? [],
+    route: s.route ?? null,
     created_at: ts,
     updated_at: ts,
   }));

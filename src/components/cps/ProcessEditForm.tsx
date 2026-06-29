@@ -31,10 +31,14 @@ import { toast } from 'sonner';
 export function ProcessEditForm({
   process,
   presetPhase,
+  presetRoute,
+  knownRoutes = [],
   trigger,
 }: {
   process?: CpsProcess;
   presetPhase?: ProcessPhase;
+  presetRoute?: string;
+  knownRoutes?: string[];
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -47,6 +51,7 @@ export function ProcessEditForm({
     phase: (process?.phase ?? presetPhase ?? '製造') as ProcessPhase,
     standard_minutes: process?.standard_minutes?.toString() ?? '',
     tools: (process?.tools ?? []).join('、'),
+    route: process?.route ?? presetRoute ?? '',
     description: process?.description ?? '',
   });
 
@@ -69,6 +74,7 @@ export function ProcessEditForm({
         .split(/[,、]/)
         .map((t) => t.trim())
         .filter(Boolean),
+      route: form.route.trim() || null,
       description: form.description || null,
     };
     try {
@@ -152,6 +158,23 @@ export function ProcessEditForm({
                 placeholder="30"
               />
             </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>ルート（並行レーン・任意）</Label>
+            <Input
+              list="cps-known-routes"
+              value={form.route}
+              onChange={(e) => set('route', e.target.value)}
+              placeholder="例: 治具製作 / CAD→CNC / 手作業"
+            />
+            <datalist id="cps-known-routes">
+              {knownRoutes.map((r) => (
+                <option key={r} value={r} />
+              ))}
+            </datalist>
+            <p className="text-[11px] text-muted-foreground">
+              同じフェーズ内で別レーンとして並行表示されます（空欄=メイン）。
+            </p>
           </div>
           <div className="grid gap-2">
             <Label>使用工具（、または , 区切り）</Label>

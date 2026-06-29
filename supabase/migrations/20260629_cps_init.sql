@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS cps_processes (
   status TEXT DEFAULT 'normal',
   description TEXT,
   tools TEXT[] DEFAULT '{}',
+  route TEXT,                       -- 同一フェーズ内の並行ルート（レーン）。NULL = メイン
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

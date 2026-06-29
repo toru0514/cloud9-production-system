@@ -27,6 +27,7 @@ export interface CpsProcess {
   status: ProcessStatus;
   description: string | null;
   tools: string[];
+  route: string | null; // 同一フェーズ内の並行ルート（レーン）。null = メイン
   created_at: string;
   updated_at: string;
 }
