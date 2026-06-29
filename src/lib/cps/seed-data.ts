@@ -38,10 +38,6 @@ export const processSeeds: ProcessSeed[] = [
   { id: 'p-order', name: '受注確認', phase: '販売', sort_order: 20, standard_minutes: 5, tools: [] },
   { id: 'p-pack', name: '梱包', phase: '販売', sort_order: 21, standard_minutes: 10, tools: ['緩衝材', '箱'] },
   { id: 'p-ship', name: '発送', phase: '販売', sort_order: 22, standard_minutes: 10, tools: [] },
-  // 改善工程
-  { id: 'p-bottleneck', name: 'ボトルネック分析', phase: '改善', sort_order: 30, standard_minutes: null, tools: [] },
-  { id: 'p-plan', name: '改善案作成', phase: '改善', sort_order: 31, standard_minutes: null, tools: [] },
-  { id: 'p-measure', name: '効果測定', phase: '改善', sort_order: 32, standard_minutes: null, tools: [] },
 ];
 
 export function buildSeedProcesses(): CpsProcess[] {

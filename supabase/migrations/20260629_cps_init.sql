@@ -145,8 +145,5 @@ INSERT INTO cps_processes (name, phase, sort_order, standard_minutes) VALUES
 ('投稿予約', 'コンテンツ', 16, 5),
 ('受注確認', '販売', 20, 5),
 ('梱包', '販売', 21, 10),
-('発送', '販売', 22, 10),
-('ボトルネック分析', '改善', 30, NULL),
-('改善案作成', '改善', 31, NULL),
-('効果測定', '改善', 32, NULL)
+('発送', '販売', 22, 10)
 ON CONFLICT DO NOTHING;

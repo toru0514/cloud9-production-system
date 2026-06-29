@@ -35,7 +35,6 @@ const PHASES: ProductPhase[] = [
   '撮影',
   '投稿',
   '販売',
-  '分析',
 ];
 
 export function ProductForm({

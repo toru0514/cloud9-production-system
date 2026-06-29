@@ -1,12 +1,9 @@
 // Cloud9 Production System (CPS) — 全型定義
 
-export type ProcessPhase =
-  | '企画'
-  | '製造'
-  | 'コンテンツ'
-  | '販売'
-  | '分析'
-  | '改善';
+// 工程フェーズ = 実態のバリューストリーム（仕入れ→製造→発信→販売→お客様）。
+// 「分析・改善」は工程ではなく、この流れを観察して直すメタ活動（=アプリ自体の役割）
+// として /improvements とダッシュボードのボトルネック表示で扱う。
+export type ProcessPhase = '企画' | '製造' | 'コンテンツ' | '販売';
 
 export type ProcessStatus = 'normal' | 'caution' | 'stopped';
 
@@ -19,8 +16,7 @@ export type ProductPhase =
   | '仕上げ'
   | '撮影'
   | '投稿'
-  | '販売'
-  | '分析';
+  | '販売';
 
 export interface CpsProcess {
   id: string;

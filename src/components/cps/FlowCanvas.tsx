@@ -12,16 +12,8 @@ import {
   Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { CpsProcessStatusItem, ProcessPhase } from '@/types/cps';
-
-const PHASES: ProcessPhase[] = [
-  '企画',
-  '製造',
-  'コンテンツ',
-  '販売',
-  '分析',
-  '改善',
-];
+import type { CpsProcessStatusItem } from '@/types/cps';
+import { PHASE_ORDER as PHASES } from '@/lib/cps/phases';
 
 const statusColor: Record<string, string> = {
   normal: '#10b981',

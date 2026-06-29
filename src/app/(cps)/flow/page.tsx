@@ -13,7 +13,7 @@ export default async function FlowPage() {
         <div>
           <h2 className="text-2xl font-bold">工程マップ</h2>
           <p className="text-sm text-muted-foreground">
-            企画 → 製造 → コンテンツ → 販売 → 分析 → 改善。ノードをクリックで工程詳細へ。
+            企画 → 製造 → コンテンツ → 販売。ノードをクリックで工程詳細へ。
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs">
