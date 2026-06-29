@@ -8,16 +8,21 @@ import { apiSend } from '@/lib/cps/client';
 import { PHASE_ORDER, PHASE_DESC } from '@/lib/cps/phases';
 import { statusMeta } from '@/lib/cps/utils/status';
 import { formatMinutes } from '@/lib/cps/utils/kpi';
-import type { CpsProcessStatusItem, ProcessPhase } from '@/types/cps';
+import type { CpsProcess, CpsProcessStatusItem, ProcessPhase } from '@/types/cps';
 import { cn } from '@/lib/utils';
-import { ArrowRight, Pencil, Plus, Flame, GripVertical } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowDownToLine,
+  GitBranch,
+  Pencil,
+  Plus,
+  Flame,
+  GripVertical,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 type Item = CpsProcessStatusItem;
-interface Step {
-  sortOrder: number;
-  items: Item[];
-}
+const COL_W = 232; // 1 枝（列）の幅 px
 
 export function ProcessBoard({ items }: { items: Item[] }) {
   const router = useRouter();
@@ -57,44 +62,80 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     return r[0]?.id;
   }, [items]);
 
-  // フェーズをステップ（縦の段）に分解。同じ sort_order = 並行ノード
-  const stepsOf = (arr: Item[], phase: string): Step[] => {
-    const map = new Map<number, Item[]>();
-    arr
-      .filter((i) => i.process.phase === phase)
-      .forEach((i) => {
-        const k = i.process.sort_order;
-        if (!map.has(k)) map.set(k, []);
-        map.get(k)!.push(i);
+  /* ---------- グリッド計算（行=sort_order, 列=route） ---------- */
+  const buildGrid = (arr: Item[], phase: string) => {
+    const pis = arr.filter((i) => i.process.phase === phase);
+    const rowVals = [...new Set(pis.map((i) => i.process.sort_order))].sort(
+      (a, b) => a - b
+    );
+    const minSortFor = (route: string) =>
+      Math.min(
+        ...pis.filter((i) => i.process.route === route).map((i) => i.process.sort_order)
+      );
+    const routeCols = [
+      ...new Set(
+        pis.map((i) => i.process.route).filter((r): r is string => Boolean(r))
+      ),
+    ].sort((a, b) => minSortFor(a) - minSortFor(b) || a.localeCompare(b));
+
+    let maxAnon = 0;
+    rowVals.forEach((rv) => {
+      const row = pis.filter((i) => i.process.sort_order === rv);
+      const nulls = row.filter((i) => !i.process.route);
+      const backbone = row.length === 1 && nulls.length === 1;
+      if (!backbone) maxAnon = Math.max(maxAnon, nulls.length);
+    });
+    const totalCols = Math.max(1, routeCols.length + maxAnon);
+
+    const rows = rowVals.map((rv) => {
+      const nodes = pis.filter((i) => i.process.sort_order === rv);
+      const backbone = nodes.length === 1 && !nodes[0].process.route;
+      const sorted = [...nodes].sort(
+        (a, b) =>
+          (a.process.route ?? '').localeCompare(b.process.route ?? '') ||
+          a.process.name.localeCompare(b.process.name)
+      );
+      let anon = routeCols.length;
+      const placed = sorted.map((item) => {
+        const col = item.process.route
+          ? routeCols.indexOf(item.process.route) + 1
+          : (anon += 1);
+        return { item, col };
       });
-    return [...map.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([sortOrder, list]) => ({
-        sortOrder,
-        items: list.sort(
-          (a, b) =>
-            (a.process.route ?? '').localeCompare(b.process.route ?? '') ||
-            a.process.name.localeCompare(b.process.name)
-        ),
-      }));
+      return { sortOrder: rv, backbone, placed, multi: nodes.length > 1 };
+    });
+
+    return { rows, totalCols, count: pis.length };
   };
 
-  // ステップ番号を base+idx*10 にきれいに振り直す（並行は同値を共有）
+  /* ---------- 並べ替え/再採番 ---------- */
   const renumber = (arr: Item[], phase: string) => {
     const base = (PHASE_ORDER.indexOf(phase as ProcessPhase) + 1) * 1000;
-    stepsOf(arr, phase).forEach((step, idx) =>
-      step.items.forEach((i) => {
-        i.process.sort_order = base + idx * 10;
-      })
+    const rowVals = [
+      ...new Set(
+        arr.filter((i) => i.process.phase === phase).map((i) => i.process.sort_order)
+      ),
+    ].sort((a, b) => a - b);
+    rowVals.forEach((rv, idx) =>
+      arr
+        .filter((i) => i.process.phase === phase && i.process.sort_order === rv)
+        .forEach((i) => {
+          i.process.sort_order = base + idx * 10;
+        })
     );
   };
 
-  const persist = async (next: Item[]) => {
-    const orig = new Map(items.map((i) => [i.process.id, i.process]));
+  const clone = () => local.map((i) => ({ ...i, process: { ...i.process } }));
+
+  const persistAll = async (next: Item[], baseline: Map<string, CpsProcess>) => {
     const changed = next.filter((i) => {
-      const o = orig.get(i.process.id);
+      const o = baseline.get(i.process.id);
       if (!o) return false;
-      return o.phase !== i.process.phase || o.sort_order !== i.process.sort_order;
+      return (
+        o.phase !== i.process.phase ||
+        o.sort_order !== i.process.sort_order ||
+        (o.route ?? '') !== (i.process.route ?? '')
+      );
     });
     if (!changed.length) return;
     setBusy(true);
@@ -104,6 +145,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
           apiSend(`/api/cps/processes/${i.process.id}`, 'PATCH', {
             phase: i.process.phase,
             sort_order: i.process.sort_order,
+            route: i.process.route,
           })
         )
       );
@@ -116,59 +158,137 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     }
   };
 
-  const clone = () => local.map((i) => ({ ...i, process: { ...i.process } }));
-
-  // 既存ステップに合流（並行ノード化）
-  const joinStep = (phase: string, stepSortOrder: number) => {
-    const id = dragId;
-    reset();
-    if (!id) return;
-    const next = clone();
-    const dragged = next.find((i) => i.process.id === id);
-    if (!dragged) return;
-    if (dragged.process.phase === phase && dragged.process.sort_order === stepSortOrder)
-      return;
-    const src = dragged.process.phase;
-    dragged.process.phase = phase as ProcessPhase;
-    dragged.process.sort_order = stepSortOrder;
-    renumber(next, phase);
-    if (src !== phase) renumber(next, src);
-    setLocal(next);
-    void persist(next);
-  };
-
-  // ステップ間に新しいステップとして挿入（gapIndex: 0..stepCount）
-  const insertStep = (phase: string, gapIndex: number) => {
-    const id = dragId;
-    reset();
-    if (!id) return;
-    const next = clone();
-    const dragged = next.find((i) => i.process.id === id);
-    if (!dragged) return;
-    const src = dragged.process.phase;
-    const others = next.filter((i) => i.process.id !== id);
-    const otherSteps = stepsOf(others, phase);
-    let so: number;
-    if (otherSteps.length === 0) so = 0;
-    else if (gapIndex <= 0) so = otherSteps[0].sortOrder - 1;
-    else if (gapIndex >= otherSteps.length)
-      so = otherSteps[otherSteps.length - 1].sortOrder + 1;
-    else so = (otherSteps[gapIndex - 1].sortOrder + otherSteps[gapIndex].sortOrder) / 2;
-    dragged.process.phase = phase as ProcessPhase;
-    dragged.process.sort_order = so;
-    renumber(next, phase);
-    if (src !== phase) renumber(next, src);
-    setLocal(next);
-    void persist(next);
-  };
+  const baseFromItems = () => new Map(items.map((i) => [i.process.id, i.process]));
 
   const reset = () => {
     setDragId(null);
     setOverKey(null);
   };
 
+  /* ---------- DnD: 行へ合流 / 段間に新ステップ ---------- */
+  const dropToRow = (phase: string, sortOrder: number) => {
+    const id = dragId;
+    reset();
+    if (!id) return;
+    const next = clone();
+    const d = next.find((i) => i.process.id === id);
+    if (!d) return;
+    if (d.process.phase === phase && d.process.sort_order === sortOrder) return;
+    const src = d.process.phase;
+    d.process.phase = phase as ProcessPhase;
+    d.process.sort_order = sortOrder;
+    renumber(next, phase);
+    if (src !== phase) renumber(next, src);
+    setLocal(next);
+    void persistAll(next, baseFromItems());
+  };
+
+  const dropToGap = (phase: string, gapIndex: number) => {
+    const id = dragId;
+    reset();
+    if (!id) return;
+    const next = clone();
+    const d = next.find((i) => i.process.id === id);
+    if (!d) return;
+    const src = d.process.phase;
+    const rowVals = [
+      ...new Set(
+        next
+          .filter((i) => i.process.id !== id && i.process.phase === phase)
+          .map((i) => i.process.sort_order)
+      ),
+    ].sort((a, b) => a - b);
+    let so: number;
+    if (rowVals.length === 0) so = 0;
+    else if (gapIndex <= 0) so = rowVals[0] - 1;
+    else if (gapIndex >= rowVals.length) so = rowVals[rowVals.length - 1] + 1;
+    else so = (rowVals[gapIndex - 1] + rowVals[gapIndex]) / 2;
+    d.process.phase = phase as ProcessPhase;
+    d.process.sort_order = so;
+    renumber(next, phase);
+    if (src !== phase) renumber(next, src);
+    setLocal(next);
+    void persistAll(next, baseFromItems());
+  };
+
+  /* ---------- 構造追加: 直列(同じ枝の下) / 並行(分岐) ---------- */
+  const genRoute = (phase: string, taken: Set<string>) => {
+    let n = 1;
+    while (taken.has(`枝${n}`)) n += 1;
+    const r = `枝${n}`;
+    taken.add(r);
+    return r;
+  };
+
+  const addSerial = async (anchor: CpsProcess) => {
+    const name = window.prompt(`「${anchor.name}」の下に追加する工程名`);
+    if (!name?.trim()) return;
+    setBusy(true);
+    try {
+      const created = await apiSend<CpsProcess>('/api/cps/processes', 'POST', {
+        name: name.trim(),
+        phase: anchor.phase,
+        route: anchor.route,
+        sort_order: anchor.sort_order,
+      });
+      const next = clone();
+      next.push({
+        process: { ...created, sort_order: anchor.sort_order + 0.5 },
+        recent_avg_minutes: null,
+        last_logged_at: null,
+        status: 'normal',
+      });
+      renumber(next, anchor.phase);
+      setLocal(next);
+      const base = baseFromItems();
+      base.set(created.id, created);
+      await persistAll(next, base);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addParallel = async (anchor: CpsProcess) => {
+    const name = window.prompt(`「${anchor.name}」と並行に追加する工程名`);
+    if (!name?.trim()) return;
+    setBusy(true);
+    try {
+      const taken = new Set(
+        local
+          .filter((i) => i.process.phase === anchor.phase && i.process.route)
+          .map((i) => i.process.route as string)
+      );
+      const loneBackbone =
+        local.filter(
+          (i) =>
+            i.process.phase === anchor.phase &&
+            i.process.sort_order === anchor.sort_order
+        ).length === 1 && !anchor.route;
+      if (loneBackbone) {
+        const anchorRoute = genRoute(anchor.phase, taken);
+        await apiSend(`/api/cps/processes/${anchor.id}`, 'PATCH', {
+          route: anchorRoute,
+        });
+      }
+      const newRoute = genRoute(anchor.phase, taken);
+      await apiSend('/api/cps/processes', 'POST', {
+        name: name.trim(),
+        phase: anchor.phase,
+        route: newRoute,
+        sort_order: anchor.sort_order,
+      });
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /* ---------- カード ---------- */
-  const Card = ({ item, compact }: { item: Item; compact?: boolean }) => {
+  const Card = ({ item }: { item: Item }) => {
     const { process, recent_avg_minutes, status } = item;
     const meta = statusMeta[status];
     const ratio =
@@ -188,7 +308,6 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         onDragEnd={reset}
         className={cn(
           'group relative cursor-grab overflow-hidden rounded-lg border bg-background p-2 shadow-sm active:cursor-grabbing',
-          compact ? 'w-44' : 'w-60',
           isBottleneck && 'ring-2 ring-red-400',
           isDragging && 'opacity-40'
         )}
@@ -205,23 +324,39 @@ export function ProcessBoard({ items }: { items: Item[] }) {
               {process.name}
             </Link>
           </div>
-          <ProcessEditForm
-            process={process}
-            knownRoutes={knownRoutes}
-            trigger={
-              <button
-                className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
-                title="編集"
-              >
-                <Pencil className="size-3.5" />
-              </button>
-            }
-          />
+          <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              onClick={() => addSerial(process)}
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent"
+              title="この下に直列で追加（同じ枝）"
+            >
+              <ArrowDownToLine className="size-3.5" />
+            </button>
+            <button
+              onClick={() => addParallel(process)}
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent"
+              title="並行に分岐を追加"
+            >
+              <GitBranch className="size-3.5" />
+            </button>
+            <ProcessEditForm
+              process={process}
+              knownRoutes={knownRoutes}
+              trigger={
+                <button
+                  className="rounded p-0.5 text-muted-foreground hover:bg-accent"
+                  title="編集"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              }
+            />
+          </div>
         </div>
         <div className="flex items-center justify-between gap-1 pl-1.5 pt-0.5">
           <span className="truncate text-[11px] text-muted-foreground">
             {process.route && (
-              <span className="mr-1 rounded bg-muted px-1 text-[10px]">
+              <span className="mr-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700 dark:bg-violet-950 dark:text-violet-300">
                 {process.route}
               </span>
             )}
@@ -253,20 +388,23 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     );
   };
 
-  /* ---------- ステップ間の挿入用 gap ---------- */
+  /* ---------- 段間 gap（新ステップ挿入） ---------- */
   const Gap = ({
     phase,
     gapIndex,
+    width,
     top,
   }: {
     phase: ProcessPhase;
     gapIndex: number;
+    width: number;
     top?: boolean;
   }) => {
     const key = `gap:${phase}:${gapIndex}`;
     const over = overKey === key;
     return (
       <div
+        style={{ width, height: top ? 12 : 22 }}
         onDragOver={(e) => {
           e.preventDefault();
           setOverKey(key);
@@ -274,17 +412,16 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         onDragLeave={() => setOverKey((k) => (k === key ? null : k))}
         onDrop={(e) => {
           e.preventDefault();
-          insertStep(phase, gapIndex);
+          dropToGap(phase, gapIndex);
         }}
-        className="flex w-full items-center justify-center"
-        style={{ height: top ? 14 : 22 }}
+        className="flex items-center justify-center"
       >
         <div
           className={cn(
             'flex items-center justify-center rounded transition-all',
             over
               ? 'h-6 w-full border-2 border-dashed border-primary bg-primary/10 text-primary'
-              : 'h-full text-muted-foreground/40'
+              : 'text-muted-foreground/40'
           )}
         >
           {over ? (
@@ -297,72 +434,17 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     );
   };
 
-  /* ---------- ステップ（並行ノードのまとまり） ---------- */
-  const StepRow = ({
-    phase,
-    step,
-  }: {
-    phase: ProcessPhase;
-    step: Step;
-  }) => {
-    const key = `step:${phase}:${step.sortOrder}`;
-    const over = overKey === key;
-    const parallel = step.items.length > 1;
-    return (
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setOverKey(key);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          joinStep(phase, step.sortOrder);
-        }}
-        className={cn(
-          'flex flex-col items-center rounded-lg p-1 transition-colors',
-          over && 'bg-primary/10 ring-2 ring-primary/40'
-        )}
-      >
-        {parallel && (
-          <div className="mb-1 flex items-center gap-1 text-[10px] font-medium text-violet-600">
-            <span className="h-px w-6 bg-violet-300" />
-            並行 {step.items.length}
-            <span className="h-px w-6 bg-violet-300" />
-          </div>
-        )}
-        <div className="flex flex-wrap items-stretch justify-center gap-2">
-          {step.items.map((item) => (
-            <Card key={item.process.id} item={item} compact={parallel} />
-          ))}
-          <ProcessEditForm
-            presetPhase={phase}
-            presetSortOrder={step.sortOrder}
-            knownRoutes={knownRoutes}
-            trigger={
-              <button
-                className="flex w-9 items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-accent"
-                title="このステップに並行ノードを追加"
-              >
-                <Plus className="size-4" />
-              </button>
-            }
-          />
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div>
       <p className="mb-2 text-xs text-muted-foreground">
-        💡 カードをドラッグ → <b>別カードに重ねると並行</b>（分岐）、
-        <b>段の間にドロップで新しいステップ</b>。フェーズをまたぐ移動も可。
+        💡 カードのホバーで{' '}
+        <ArrowDownToLine className="inline size-3" /> 直列追加・
+        <GitBranch className="inline size-3" /> 分岐追加。ドラッグで段の移動／別カードに重ねて並行／段の間で新ステップ。
       </p>
       <div className="flex items-start gap-3 overflow-x-auto pb-3">
         {PHASE_ORDER.map((phase, pi) => {
-          const steps = stepsOf(local, phase);
+          const grid = buildGrid(local, phase);
+          const width = grid.totalCols * COL_W;
           return (
             <div key={phase} className="flex items-stretch gap-3">
               <div className="flex shrink-0 flex-col rounded-xl border bg-muted/30 p-2">
@@ -375,7 +457,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
                       </span>
                       <span className="text-sm font-bold">{phase}</span>
                       <span className="text-xs text-muted-foreground">
-                        {steps.reduce((a, s) => a + s.items.length, 0)}
+                        {grid.count}
                       </span>
                     </div>
                     <p className="pl-7 text-[11px] text-muted-foreground">
@@ -396,17 +478,69 @@ export function ProcessBoard({ items }: { items: Item[] }) {
                   />
                 </div>
 
-                {/* 縦フロー */}
-                <div className="flex min-w-[15rem] flex-col items-center px-1">
-                  {steps.length === 0 ? (
-                    <Gap phase={phase} gapIndex={0} />
+                {/* 縦フロー（行=ステップ / 列=枝） */}
+                <div
+                  className="flex flex-col items-center px-1"
+                  style={{ minWidth: Math.max(width, COL_W) }}
+                >
+                  {grid.rows.length === 0 ? (
+                    <Gap phase={phase} gapIndex={0} width={width} />
                   ) : (
                     <>
-                      <Gap phase={phase} gapIndex={0} top />
-                      {steps.map((step, s) => (
-                        <div key={step.sortOrder} className="w-full">
-                          <StepRow phase={phase} step={step} />
-                          <Gap phase={phase} gapIndex={s + 1} />
+                      <Gap phase={phase} gapIndex={0} width={width} top />
+                      {grid.rows.map((row, r) => (
+                        <div key={row.sortOrder} style={{ width }}>
+                          {row.multi && (
+                            <div className="mb-1 flex items-center justify-center gap-1 text-[10px] font-medium text-violet-600">
+                              <span className="h-px w-6 bg-violet-300" />
+                              分岐 {row.placed.length}
+                              <span className="h-px w-6 bg-violet-300" />
+                            </div>
+                          )}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setOverKey(`row:${phase}:${row.sortOrder}`);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              dropToRow(phase, row.sortOrder);
+                            }}
+                            className={cn(
+                              'grid rounded-lg p-1 transition-colors',
+                              overKey === `row:${phase}:${row.sortOrder}` &&
+                                'bg-primary/10 ring-2 ring-primary/40'
+                            )}
+                            style={{
+                              gridTemplateColumns: `repeat(${grid.totalCols}, minmax(0, 1fr))`,
+                              gap: 8,
+                            }}
+                          >
+                            {row.placed.map(({ item, col }) => (
+                              <div
+                                key={item.process.id}
+                                style={
+                                  row.backbone
+                                    ? {
+                                        gridColumn: '1 / -1',
+                                        maxWidth: COL_W,
+                                        margin: '0 auto',
+                                        width: '100%',
+                                      }
+                                    : { gridColumn: col }
+                                }
+                              >
+                                <Card item={item} />
+                              </div>
+                            ))}
+                          </div>
+                          <Gap
+                            phase={phase}
+                            gapIndex={r + 1}
+                            width={width}
+                          />
                         </div>
                       ))}
                     </>
