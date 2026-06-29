@@ -116,13 +116,14 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         arr.filter((i) => i.process.phase === phase).map((i) => i.process.sort_order)
       ),
     ].sort((a, b) => a - b);
-    rowVals.forEach((rv, idx) =>
-      arr
-        .filter((i) => i.process.phase === phase && i.process.sort_order === rv)
-        .forEach((i) => {
-          i.process.sort_order = base + idx * 10;
-        })
-    );
+    // 旧 sort_order → 新 sort_order を先に確定（書き換え中の再マッチによる玉突きを防ぐ）
+    const orderMap = new Map(rowVals.map((rv, idx) => [rv, base + idx * 10]));
+    arr
+      .filter((i) => i.process.phase === phase)
+      .forEach((i) => {
+        const next = orderMap.get(i.process.sort_order);
+        if (next != null) i.process.sort_order = next;
+      });
   };
 
   const clone = () => local.map((i) => ({ ...i, process: { ...i.process } }));
@@ -177,7 +178,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     const src = d.process.phase;
     d.process.phase = phase as ProcessPhase;
     d.process.sort_order = sortOrder;
-    ensureRowRoutes(next, phase, sortOrder);
+    normalizePhase(next, phase);
     renumber(next, phase);
     if (src !== phase) renumber(next, src);
     setLocal(next);
@@ -213,27 +214,31 @@ export function ProcessBoard({ items }: { items: Item[] }) {
   };
 
   /* ---------- 構造追加: 直列(同じ枝の下) / 並行(分岐) ---------- */
-  const genRoute = (taken: Set<string>) => {
-    let n = 1;
-    while (taken.has(`枝${n}`)) n += 1;
-    const r = `枝${n}`;
-    taken.add(r);
-    return r;
-  };
-
-  // 複数ノードの段（並行）になったら、null の枝に識別子を自動付与
-  const ensureRowRoutes = (next: Item[], phase: string, sortOrder: number) => {
-    const row = next.filter(
-      (i) => i.process.phase === phase && i.process.sort_order === sortOrder
-    );
-    if (row.length <= 1) return;
-    const taken = new Set(
-      next
-        .filter((i) => i.process.phase === phase && i.process.route)
-        .map((i) => i.process.route as string)
-    );
-    row.forEach((i) => {
-      if (!i.process.route) i.process.route = genRoute(taken);
+  // 並行段（複数ノードの行）の null 枝に、空いている最小スロット(枝1,枝2…)を割当て。
+  // 既存の枝は保持＝列を使い回すので、行が違っても列が揃う。
+  const normalizePhase = (next: Item[], phase: string) => {
+    const rowVals = [
+      ...new Set(
+        next.filter((i) => i.process.phase === phase).map((i) => i.process.sort_order)
+      ),
+    ];
+    rowVals.forEach((rv) => {
+      const row = next.filter(
+        (i) => i.process.phase === phase && i.process.sort_order === rv
+      );
+      if (row.length <= 1) return;
+      const used = new Set(
+        row.filter((i) => i.process.route).map((i) => i.process.route as string)
+      );
+      row
+        .filter((i) => !i.process.route)
+        .sort((a, b) => a.process.name.localeCompare(b.process.name))
+        .forEach((i) => {
+          let n = 1;
+          while (used.has(`枝${n}`)) n += 1;
+          i.process.route = `枝${n}`;
+          used.add(`枝${n}`);
+        });
     });
   };
 
@@ -245,8 +250,8 @@ export function ProcessBoard({ items }: { items: Item[] }) {
       const next = clone();
       const a = next.find((i) => i.process.id === anchor.id)?.process;
       if (!a) return;
-      // 並行段なら枝を確定させ、子は同じ枝を引き継ぐ
-      ensureRowRoutes(next, a.phase, a.sort_order);
+      // 並行段なら枝(列)を確定させ、子は同じ列を引き継ぐ
+      normalizePhase(next, a.phase);
       const childRoute = a.route;
 
       const created = await apiSend<CpsProcess>('/api/cps/processes', 'POST', {
@@ -281,27 +286,20 @@ export function ProcessBoard({ items }: { items: Item[] }) {
       const next = clone();
       const a = next.find((i) => i.process.id === anchor.id)?.process;
       if (!a) return;
-      const taken = new Set(
-        next
-          .filter((i) => i.process.phase === a.phase && i.process.route)
-          .map((i) => i.process.route as string)
-      );
-      // アンカーが無印（バックボーン）なら枝に変える
-      if (!a.route) a.route = genRoute(taken);
-      const newRoute = genRoute(taken);
-
       const created = await apiSend<CpsProcess>('/api/cps/processes', 'POST', {
         name: name.trim(),
         phase: a.phase,
-        route: newRoute,
+        route: null,
         sort_order: a.sort_order,
       });
       next.push({
-        process: { ...created, route: newRoute, sort_order: a.sort_order },
+        process: { ...created, route: null, sort_order: a.sort_order },
         recent_avg_minutes: null,
         last_logged_at: null,
         status: 'normal',
       });
+      // 同じ行が並行になったので列スロットを割当て（アンカーも含む）
+      normalizePhase(next, a.phase);
       setLocal(next);
       const base = baseFromItems();
       base.set(created.id, created);
