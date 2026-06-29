@@ -21,12 +21,15 @@ const statusColor: Record<string, string> = {
   stopped: '#ef4444',
 };
 
-const LANE_W = 210;
-const NODE_W = 180;
-const ROW_H = 70;
-const PHASE_GAP = 60;
-const HEADER_Y = 0;
+const LANE_W = 200;
+const NODE_W = 170;
+const ROW_H = 90;
+const PHASE_GAP = 70;
 const FIRST_ROW_Y = 110;
+
+interface Step {
+  items: CpsProcessStatusItem[];
+}
 
 export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
   const router = useRouter();
@@ -35,37 +38,33 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
 
-    // フェーズごとのレーン（メイン + ルート）を組む
-    const lanesOf = (phase: ProcessPhase) => {
-      const pis = items
+    const stepsOf = (phase: ProcessPhase): Step[] => {
+      const map = new Map<number, CpsProcessStatusItem[]>();
+      items
         .filter((i) => i.process.phase === phase)
-        .sort((a, b) => a.process.sort_order - b.process.sort_order);
-      const routes = [
-        ...new Set(
-          pis.map((i) => i.process.route).filter((r): r is string => Boolean(r))
-        ),
-      ];
-      const lanes: CpsProcessStatusItem[][] = [];
-      const main = pis.filter((i) => !i.process.route);
-      if (main.length) lanes.push(main);
-      routes.forEach((r) => lanes.push(pis.filter((i) => i.process.route === r)));
-      return lanes;
+        .forEach((i) => {
+          const k = i.process.sort_order;
+          if (!map.has(k)) map.set(k, []);
+          map.get(k)!.push(i);
+        });
+      return [...map.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, list]) => ({ items: list }));
     };
 
     let x = 0;
-    let prevExits: string[] = []; // 直前フェーズの出口ノードID群
+    let prevExits: string[] = [];
     let prevHeader: string | null = null;
 
     PHASE_ORDER.forEach((phase) => {
-      const lanes = lanesOf(phase);
-      const laneCount = Math.max(1, lanes.length);
-      const phaseW = laneCount * LANE_W;
+      const steps = stepsOf(phase);
+      const maxPar = Math.max(1, ...steps.map((s) => s.items.length));
+      const phaseW = maxPar * LANE_W;
       const headerId = `phase-${phase}`;
 
-      // フェーズ見出し
       nodes.push({
         id: headerId,
-        position: { x: x + phaseW / 2 - NODE_W / 2, y: HEADER_Y },
+        position: { x: x + phaseW / 2 - NODE_W / 2, y: 0 },
         data: { label: phase },
         draggable: false,
         selectable: false,
@@ -81,11 +80,10 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
         },
       });
 
-      // 直前フェーズ出口 → このフェーズ見出し（合流 → 次へ）
       if (prevExits.length) {
         prevExits.forEach((src, i) =>
           edges.push({
-            id: `merge-${src}-${headerId}-${i}`,
+            id: `m-${src}-${headerId}-${i}`,
             source: src,
             target: headerId,
             style: { stroke: '#94a3b8' },
@@ -101,23 +99,24 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
         });
       }
 
-      const exits: string[] = [];
-
-      lanes.forEach((lane, li) => {
-        const laneX = x + li * LANE_W;
-        let prevInLane: string | null = null;
-        lane.forEach((item, ri) => {
+      let prevLayer: string[] = [headerId];
+      steps.forEach((step, s) => {
+        const n = step.items.length;
+        const rowW = n * LANE_W;
+        const offset = x + (phaseW - rowW) / 2;
+        const layer: string[] = [];
+        step.items.forEach((item, k) => {
           const color = statusColor[item.status] ?? '#10b981';
-          const labelRoute = item.process.route ? `「${item.process.route}」` : '';
+          const tag = item.process.route ? `[${item.process.route}] ` : '';
           nodes.push({
             id: item.process.id,
-            position: { x: laneX, y: FIRST_ROW_Y + ri * ROW_H },
+            position: { x: offset + k * LANE_W, y: FIRST_ROW_Y + s * ROW_H },
             data: {
-              label: `${item.process.name}${
+              label: `${tag}${item.process.name}${
                 item.recent_avg_minutes != null
                   ? ` (${item.recent_avg_minutes}分)`
                   : ''
-              }${ri === 0 && labelRoute ? `\n${labelRoute}` : ''}`,
+              }`,
             },
             sourcePosition: Position.Bottom,
             targetPosition: Position.Top,
@@ -132,24 +131,27 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
               fontSize: 12,
               textAlign: 'left',
               padding: '6px 10px',
-              whiteSpace: 'pre-line',
             },
           });
-          // 見出し → 先頭ノード（分岐）、以降は直列
-          const src = prevInLane ?? headerId;
-          edges.push({
-            id: `seq-${src}-${item.process.id}`,
-            source: src,
-            target: item.process.id,
-            style: { stroke: prevInLane ? '#cbd5e1' : '#a78bfa' },
-            animated: !prevInLane && lanes.length > 1,
-          });
-          prevInLane = item.process.id;
+          layer.push(item.process.id);
         });
-        if (prevInLane) exits.push(prevInLane);
+        // 前段の各ノード → 今段の各ノード（分岐/合流）
+        const fork = prevLayer.length === 1 || layer.length === 1;
+        prevLayer.forEach((src) =>
+          layer.forEach((dst) =>
+            edges.push({
+              id: `s-${src}-${dst}`,
+              source: src,
+              target: dst,
+              animated: s === 0 && layer.length > 1,
+              style: { stroke: fork ? '#a78bfa' : '#cbd5e1' },
+            })
+          )
+        );
+        prevLayer = layer;
       });
 
-      prevExits = exits;
+      prevExits = steps.length ? prevLayer : [];
       prevHeader = headerId;
       x += phaseW + PHASE_GAP;
     });
@@ -159,9 +161,7 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
 
   const onNodeClick = useCallback(
     (_: unknown, node: Node) => {
-      if (!node.id.startsWith('phase-')) {
-        router.push(`/process/${node.id}`);
-      }
+      if (!node.id.startsWith('phase-')) router.push(`/process/${node.id}`);
     },
     [router]
   );

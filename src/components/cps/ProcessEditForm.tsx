@@ -32,12 +32,14 @@ export function ProcessEditForm({
   process,
   presetPhase,
   presetRoute,
+  presetSortOrder,
   knownRoutes = [],
   trigger,
 }: {
   process?: CpsProcess;
   presetPhase?: ProcessPhase;
   presetRoute?: string;
+  presetSortOrder?: number;
   knownRoutes?: string[];
   trigger: React.ReactNode;
 }) {
@@ -82,7 +84,10 @@ export function ProcessEditForm({
         await apiSend(`/api/cps/processes/${process.id}`, 'PATCH', payload);
         toast.success('工程を更新しました');
       } else {
-        await apiSend('/api/cps/processes', 'POST', payload);
+        await apiSend('/api/cps/processes', 'POST', {
+          ...payload,
+          ...(presetSortOrder != null ? { sort_order: presetSortOrder } : {}),
+        });
         toast.success('工程を追加しました');
       }
       setOpen(false);
@@ -160,12 +165,12 @@ export function ProcessEditForm({
             </div>
           </div>
           <div className="grid gap-2">
-            <Label>ルート（並行レーン・任意）</Label>
+            <Label>ラベル（任意）</Label>
             <Input
               list="cps-known-routes"
               value={form.route}
               onChange={(e) => set('route', e.target.value)}
-              placeholder="例: 治具製作 / CAD→CNC / 手作業"
+              placeholder="例: 治具 / CNC / 手作業"
             />
             <datalist id="cps-known-routes">
               {knownRoutes.map((r) => (
@@ -173,7 +178,7 @@ export function ProcessEditForm({
               ))}
             </datalist>
             <p className="text-[11px] text-muted-foreground">
-              同じフェーズ内で別レーンとして並行表示されます（空欄=メイン）。
+              カードに表示される補助ラベル。並行分岐は本ボード上でドラッグして同じステップに重ねると作れます。
             </p>
           </div>
           <div className="grid gap-2">
