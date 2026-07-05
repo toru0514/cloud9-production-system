@@ -48,26 +48,38 @@ function buildSeedDb(): MockDb {
   const products = buildSeedProducts();
   const ts = new Date().toISOString();
 
-  const findP = (name: string) => processes.find((p) => p.name === name)!;
+  // 共通工程（製造以外, route = null）は名前で一意。
+  const findShared = (name: string) =>
+    processes.find((p) => p.name === name && !p.route)!;
+  // 製造工程は同じ工程名がカテゴリごとに複数あるため、商品のカテゴリで絞り込む。
+  const catOf = (productId: string) =>
+    products.find((p) => p.id === productId)?.category ?? null;
+  const findMfg = (productId: string, name: string) => {
+    const category = catOf(productId);
+    return (
+      processes.find((p) => p.route === category && p.name === name) ??
+      findShared(name)
+    );
+  };
 
   // 作業実績: 研磨は標準30分に対し実績45分前後（caution〜stopped 相当）
   const work_logs: CpsWorkLog[] = [
-    mkLog(findP('研磨').id, 'prod-walnut-bangle-m', 1, 46),
-    mkLog(findP('研磨').id, 'prod-maple-ring', 3, 44),
-    mkLog(findP('研磨').id, 'prod-oak-earcuff', 5, 48),
-    mkLog(findP('切断').id, 'prod-walnut-bangle-m', 1, 18),
-    mkLog(findP('切断').id, 'prod-maple-ring', 2, 22),
-    mkLog(findP('塗装').id, 'prod-walnut-bangle-m', 1, 19),
-    mkLog(findP('写真撮影').id, 'prod-maple-ring', 2, 70),
-    mkLog(findP('写真撮影').id, 'prod-walnut-bangle-m', 4, 65),
-    mkLog(findP('材料選定').id, 'prod-oak-earcuff', 1, 9),
-    mkLog(findP('梱包').id, 'prod-walnut-bangle-m', 2, 11),
+    mkLog(findMfg('prod-walnut-bangle-m', '研磨').id, 'prod-walnut-bangle-m', 1, 46),
+    mkLog(findMfg('prod-maple-ring', '研磨').id, 'prod-maple-ring', 3, 44),
+    mkLog(findMfg('prod-crystal-ring', '研磨').id, 'prod-crystal-ring', 5, 48),
+    mkLog(findMfg('prod-walnut-bangle-m', '切断').id, 'prod-walnut-bangle-m', 1, 18),
+    mkLog(findMfg('prod-maple-ring', '切断').id, 'prod-maple-ring', 2, 22),
+    mkLog(findMfg('prod-walnut-bangle-m', '塗装').id, 'prod-walnut-bangle-m', 1, 19),
+    mkLog(findShared('写真撮影').id, 'prod-maple-ring', 2, 70),
+    mkLog(findShared('写真撮影').id, 'prod-walnut-bangle-m', 4, 65),
+    mkLog(findMfg('prod-crystal-ring', '材料選定').id, 'prod-crystal-ring', 1, 9),
+    mkLog(findShared('梱包').id, 'prod-walnut-bangle-m', 2, 11),
   ];
 
   const improvements: CpsImprovement[] = [
     {
       id: mockId('imp'),
-      process_id: findP('研磨').id,
+      process_id: findMfg('prod-crystal-ring', '研磨').id,
       title: '#120 を先に粗削りしてから番手を上げる',
       before_desc: 'いきなり #240 から始めて削り残しが多く時間超過',
       after_desc: '#120 → #240 → #400 の順で粗削りを先行',
@@ -81,7 +93,7 @@ function buildSeedDb(): MockDb {
     },
     {
       id: mockId('imp'),
-      process_id: findP('研磨').id,
+      process_id: findMfg('prod-crystal-ring', '研磨').id,
       title: '研磨治具の導入',
       before_desc: '手持ちで角度が安定せずムラが出る',
       after_desc: '専用治具で固定し均一に研磨',
@@ -95,7 +107,7 @@ function buildSeedDb(): MockDb {
     },
     {
       id: mockId('imp'),
-      process_id: findP('写真撮影').id,
+      process_id: findShared('写真撮影').id,
       title: '撮影セットの常設化',
       before_desc: '毎回ライティングを組み直していた',
       after_desc: '撮影ブースを常設し即撮影できる状態に',
@@ -110,11 +122,11 @@ function buildSeedDb(): MockDb {
   ];
 
   const tasks: CpsTask[] = [
-    mkTask('研磨工程の実績が標準比1.5倍。改善案を検討', findP('研磨').id, 'prod-oak-earcuff', 1),
-    mkTask('メープルリングの商品写真を撮影', findP('写真撮影').id, 'prod-maple-ring', 1),
-    mkTask('ウォルナットバングルの再入荷分を梱包・発送', findP('梱包').id, 'prod-walnut-bangle-m', 2),
-    mkTask('今週のInstagram投稿を生成・予約', findP('Instagram投稿生成').id, null, 2),
-    mkTask('オークイヤーカフの原価を見直す', null, 'prod-oak-earcuff', 3),
+    mkTask('研磨工程の実績が標準比1.5倍。改善案を検討', findMfg('prod-crystal-ring', '研磨').id, 'prod-crystal-ring', 1),
+    mkTask('メープルリングの商品写真を撮影', findShared('写真撮影').id, 'prod-maple-ring', 1),
+    mkTask('ウォルナットバングルの再入荷分を梱包・発送', findShared('梱包').id, 'prod-walnut-bangle-m', 2),
+    mkTask('今週のInstagram投稿を生成・予約', findShared('Instagram投稿生成').id, null, 2),
+    mkTask('クリスタルウッドリングの原価を見直す', null, 'prod-crystal-ring', 3),
   ];
 
   const kpi_daily: CpsKpiDaily[] = buildKpiHistory();

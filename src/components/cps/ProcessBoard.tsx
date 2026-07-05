@@ -8,6 +8,12 @@ import { apiSend } from '@/lib/cps/client';
 import { PHASE_ORDER, PHASE_DESC } from '@/lib/cps/phases';
 import { statusMeta } from '@/lib/cps/utils/status';
 import { formatMinutes } from '@/lib/cps/utils/kpi';
+import {
+  ALL_CATEGORIES,
+  filterManufacturingByCategory,
+  manufacturingCategories,
+} from '@/lib/cps/utils/manufacturing';
+import { CategoryFilter } from '@/components/cps/CategoryFilter';
 import type { CpsProcess, CpsProcessStatusItem, ProcessPhase } from '@/types/cps';
 import { cn } from '@/lib/utils';
 import {
@@ -138,6 +144,8 @@ export function ProcessBoard({ items }: { items: Item[] }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 製造レーン（商品ライン）の絞り込み。全体編集は local に対して行い、表示だけ絞る。
+  const [category, setCategory] = useState<string>(ALL_CATEGORIES);
 
   const sig = items
     .map(
@@ -153,6 +161,13 @@ export function ProcessBoard({ items }: { items: Item[] }) {
       items.map((i) => i.process.route).filter((r): r is string => Boolean(r))
     ),
   ];
+
+  // 製造レーンのカテゴリ一覧 + 選択カテゴリで絞った表示用データ（DnD 対象の local は絞らない）。
+  const categories = useMemo(() => manufacturingCategories(local), [local]);
+  const visible = useMemo(
+    () => filterManufacturingByCategory(local, category),
+    [local, category]
+  );
 
   const bottleneckId = useMemo(() => {
     const r = items
@@ -576,9 +591,18 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         <ArrowDownToLine className="inline size-3" /> 直列追加・
         <GitBranch className="inline size-3" /> 分岐追加。ドラッグで段の移動／別カードに重ねて並行／段の間で新ステップ。
       </p>
+      {categories.length > 0 && (
+        <div className="mb-3">
+          <CategoryFilter
+            categories={categories}
+            selected={category}
+            onSelect={setCategory}
+          />
+        </div>
+      )}
       <div className="flex items-start gap-3 overflow-x-auto pb-3">
         {PHASE_ORDER.map((phase, pi) => {
-          const grid = buildGrid(local, phase);
+          const grid = buildGrid(visible, phase);
           const width = grid.totalCols * COL_W;
           const connectors = computeConnectors(grid.rows);
           return (

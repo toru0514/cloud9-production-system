@@ -1,5 +1,5 @@
 import { getProcessStatusItems } from '@/lib/cps/supabase';
-import { FlowCanvas } from '@/components/cps/FlowCanvas';
+import { FlowView } from '@/components/cps/FlowView';
 import { StatusDot } from '@/components/cps/StatusDot';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export default async function FlowPage() {
         <div>
           <h2 className="text-2xl font-bold">工程マップ</h2>
           <p className="text-sm text-muted-foreground">
-            企画 → 製造 → コンテンツ → 販売。ノードをクリックで工程詳細へ。
+            製造は商品ライン（カテゴリ）ごとに分岐。上流・下流は共通。ノードをクリックで工程詳細へ。
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs">
@@ -28,7 +28,7 @@ export default async function FlowPage() {
           </span>
         </div>
       </div>
-      <FlowCanvas items={items} />
+      <FlowView items={items} />
     </div>
   );
 }
