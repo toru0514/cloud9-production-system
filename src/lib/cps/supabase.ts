@@ -26,6 +26,9 @@ import type {
   CpsProcessStatusItem,
   CpsProduct,
   CpsTask,
+  CpsWorkCombination,
+  CpsWorkCombinationDetail,
+  CpsWorkElement,
   CpsWorkLog,
   ProcessPhase,
 } from '@/types/cps';
@@ -662,6 +665,197 @@ export async function listKpiDaily(sinceDays = 30): Promise<CpsKpiDaily[]> {
   return getMockDb()
     .kpi_daily.filter((r) => r.date >= sinceStr)
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/* ============================================================
+ * 標準作業組合せ票 (work_combinations / work_elements)
+ * ============================================================ */
+
+export async function listWorkCombinations(): Promise<CpsWorkCombination[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_work_combinations')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as CpsWorkCombination[];
+  }
+  return [...getMockDb().work_combinations].sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? '')
+  );
+}
+
+async function listWorkElements(
+  combinationId: string
+): Promise<CpsWorkElement[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_work_elements')
+      .select('*')
+      .eq('combination_id', combinationId)
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as CpsWorkElement[];
+  }
+  return getMockDb()
+    .work_elements.filter((e) => e.combination_id === combinationId)
+    .sort((a, b) => a.sort_order - b.sort_order || a.seq - b.seq);
+}
+
+export async function getWorkCombination(
+  id: string
+): Promise<CpsWorkCombinationDetail | null> {
+  let combination: CpsWorkCombination | null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_work_combinations')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    combination = (data as CpsWorkCombination) ?? null;
+  } else {
+    combination =
+      getMockDb().work_combinations.find((c) => c.id === id) ?? null;
+  }
+  if (!combination) return null;
+  const elements = await listWorkElements(id);
+  return { combination, elements };
+}
+
+export type CreateWorkCombinationInput = Partial<CpsWorkCombination> & {
+  name: string;
+};
+
+export async function createWorkCombination(
+  input: CreateWorkCombinationInput
+): Promise<CpsWorkCombination> {
+  const ts = nowISO();
+  const row: CpsWorkCombination = {
+    id: mockId('wc'),
+    name: input.name,
+    process_id: input.process_id ?? null,
+    product_line: input.product_line ?? null,
+    required_qty: input.required_qty ?? 1,
+    operating_seconds: input.operating_seconds ?? 27600,
+    note: input.note ?? null,
+    created_at: ts,
+    updated_at: ts,
+  };
+  if (isSupabaseConfigured()) {
+    const { id: _omit, ...insert } = row;
+    void _omit;
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_work_combinations')
+      .insert(insert)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as CpsWorkCombination;
+  }
+  getMockDb().work_combinations.unshift(row);
+  return row;
+}
+
+export async function updateWorkCombination(
+  id: string,
+  patch: Partial<CpsWorkCombination>
+): Promise<CpsWorkCombination> {
+  const update = { ...patch, updated_at: nowISO() };
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_work_combinations')
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as CpsWorkCombination;
+  }
+  const db = getMockDb();
+  const idx = db.work_combinations.findIndex((c) => c.id === id);
+  if (idx < 0) throw new Error('work combination not found');
+  db.work_combinations[idx] = { ...db.work_combinations[idx], ...update };
+  return db.work_combinations[idx];
+}
+
+export async function deleteWorkCombination(id: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabaseAdmin()
+      .from('cps_work_combinations')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return;
+  }
+  const db = getMockDb();
+  const idx = db.work_combinations.findIndex((c) => c.id === id);
+  if (idx >= 0) db.work_combinations.splice(idx, 1);
+  db.work_elements = db.work_elements.filter((e) => e.combination_id !== id);
+}
+
+export interface WorkElementInput {
+  seq: number;
+  name: string;
+  manual_seconds: number;
+  auto_seconds: number;
+  walk_seconds: number;
+  sort_order: number;
+}
+
+// 編集後の全作業要素を一括置換する（差分ではなく総入れ替え）。
+export async function replaceWorkElements(
+  combinationId: string,
+  elements: WorkElementInput[]
+): Promise<CpsWorkElement[]> {
+  const ts = nowISO();
+  if (isSupabaseConfigured()) {
+    const admin = getSupabaseAdmin();
+    const { error: delErr } = await admin
+      .from('cps_work_elements')
+      .delete()
+      .eq('combination_id', combinationId);
+    if (delErr) throw delErr;
+    if (elements.length === 0) {
+      await updateWorkCombination(combinationId, {});
+      return [];
+    }
+    const insert = elements.map((e) => ({
+      combination_id: combinationId,
+      seq: e.seq,
+      name: e.name,
+      manual_seconds: e.manual_seconds,
+      auto_seconds: e.auto_seconds,
+      walk_seconds: e.walk_seconds,
+      sort_order: e.sort_order,
+    }));
+    const { data, error } = await admin
+      .from('cps_work_elements')
+      .insert(insert)
+      .select('*');
+    if (error) throw error;
+    await updateWorkCombination(combinationId, {});
+    return (data ?? []) as CpsWorkElement[];
+  }
+  const db = getMockDb();
+  db.work_elements = db.work_elements.filter(
+    (e) => e.combination_id !== combinationId
+  );
+  const rows: CpsWorkElement[] = elements.map((e) => ({
+    id: mockId('we'),
+    combination_id: combinationId,
+    seq: e.seq,
+    name: e.name,
+    manual_seconds: e.manual_seconds,
+    auto_seconds: e.auto_seconds,
+    walk_seconds: e.walk_seconds,
+    sort_order: e.sort_order,
+    created_at: ts,
+  }));
+  db.work_elements.push(...rows);
+  const idx = db.work_combinations.findIndex((c) => c.id === combinationId);
+  if (idx >= 0) db.work_combinations[idx].updated_at = ts;
+  return rows;
 }
 
 /* ============================================================
