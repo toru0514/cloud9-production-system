@@ -18,11 +18,13 @@ import { StatusDot } from '@/components/cps/StatusDot';
 import { WorkLogForm } from '@/components/cps/WorkLogForm';
 import { ImprovementForm } from '@/components/cps/ImprovementForm';
 import { AiSuggestButton } from '@/components/cps/AiSuggestButton';
+import { ProcessEditForm } from '@/components/cps/ProcessEditForm';
 import { Markdown } from '@/components/cps/Markdown';
 import { ImprovementStatusControl } from '@/components/cps/ImprovementStatusControl';
+import { Button } from '@/components/ui/button';
 import { formatMinutes } from '@/lib/cps/utils/kpi';
 import { statusMeta } from '@/lib/cps/utils/status';
-import { ChevronLeft, Wrench } from 'lucide-react';
+import { ChevronLeft, Pencil, Wrench } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +49,23 @@ export default async function ProcessDetailPage({
   const status = statusItem?.status ?? 'normal';
   const meta = statusMeta[status];
 
+  // 編集フォームの入力候補
+  const knownRoutes = [
+    ...new Set(
+      statusItems
+        .map((s) => s.process.route)
+        .filter((r): r is string => Boolean(r))
+    ),
+  ];
+  const knownLines = [
+    ...new Set(
+      [
+        ...statusItems.map((s) => s.process.product_line),
+        ...products.map((p) => p.category),
+      ].filter((l): l is string => Boolean(l))
+    ),
+  ];
+
   return (
     <div className="flex flex-col gap-6">
       <Link
@@ -69,6 +88,16 @@ export default async function ProcessDetailPage({
           </Badge>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ProcessEditForm
+            process={process}
+            knownRoutes={knownRoutes}
+            knownLines={knownLines}
+            trigger={
+              <Button variant="outline">
+                <Pencil className="size-4" /> 工程を編集
+              </Button>
+            }
+          />
           <AiSuggestButton processId={id} />
           <WorkLogForm processId={id} products={products} />
         </div>

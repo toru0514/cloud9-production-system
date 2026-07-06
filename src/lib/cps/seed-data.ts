@@ -14,6 +14,7 @@ interface ProcessSeed {
   tools?: string[];
   description?: string;
   route?: string | null;
+  product_line?: string | null;
 }
 
 // ---- 製造工程は「商品ライン（カテゴリ）」ごとに分ける ----
@@ -89,7 +90,8 @@ const sharedProcessSeeds: ProcessSeed[] = [
   { id: 'p-ship', name: '発送', phase: '販売', sort_order: 22, standard_minutes: 10, tools: [] },
 ];
 
-// カテゴリ別 製造工程を ProcessSeed に展開（id は `p-<catKey>-<stepKey>` で一意化、route = カテゴリ名）。
+// カテゴリ別 製造工程を ProcessSeed に展開（id は `p-<catKey>-<stepKey>` で一意化、
+// product_line = 商品ライン名。route(枝) は使わない）。
 const manufacturingProcessSeeds: ProcessSeed[] = manufacturingByCategory.flatMap((cat) =>
   cat.steps.map((s) => ({
     id: `p-${cat.catKey}-${s.key}`,
@@ -98,7 +100,7 @@ const manufacturingProcessSeeds: ProcessSeed[] = manufacturingByCategory.flatMap
     sort_order: s.sort_order,
     standard_minutes: s.standard_minutes,
     tools: s.tools,
-    route: cat.category,
+    product_line: cat.category,
   }))
 );
 
@@ -120,6 +122,7 @@ export function buildSeedProcesses(): CpsProcess[] {
     description: s.description ?? null,
     tools: s.tools ?? [],
     route: s.route ?? null,
+    product_line: s.product_line ?? null,
     created_at: ts,
     updated_at: ts,
   }));

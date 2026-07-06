@@ -12,8 +12,9 @@ import {
   Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { CpsProcessStatusItem, ProcessPhase } from '@/types/cps';
+import type { CpsProcessStatusItem } from '@/types/cps';
 import { PHASE_ORDER } from '@/lib/cps/phases';
+import { laneKey } from '@/lib/cps/utils/manufacturing';
 
 const statusColor: Record<string, string> = {
   normal: '#10b981',
@@ -52,11 +53,13 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
       );
       const minSortFor = (r: string) =>
         Math.min(
-          ...pis.filter((i) => i.process.route === r).map((i) => i.process.sort_order)
+          ...pis
+            .filter((i) => laneKey(i.process) === r)
+            .map((i) => i.process.sort_order)
         );
       const routeCols = [
         ...new Set(
-          pis.map((i) => i.process.route).filter((r): r is string => Boolean(r))
+          pis.map((i) => laneKey(i.process)).filter((r): r is string => Boolean(r))
         ),
       ].sort((a, b) => minSortFor(a) - minSortFor(b) || a.localeCompare(b));
       const phaseW = Math.max(1, routeCols.length) * LANE_W;
@@ -96,16 +99,15 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
       pis.forEach((it) => nodeOf.set(it.process.id, it));
       rowVals.forEach((rv, r) => {
         const row = pis.filter((i) => i.process.sort_order === rv);
-        const backbone = row.length === 1 && !row[0].process.route;
+        const backbone = row.length === 1 && !laneKey(row[0].process);
         row.forEach((item) => {
-          const ci = item.process.route
-            ? routeCols.indexOf(item.process.route)
-            : -1;
+          const lk = laneKey(item.process);
+          const ci = lk ? routeCols.indexOf(lk) : -1;
           const nx = backbone
             ? x + phaseW / 2 - NODE_W / 2
             : x + (ci < 0 ? 0 : ci) * LANE_W + (LANE_W - NODE_W) / 2;
           const color = statusColor[item.status] ?? '#10b981';
-          const tag = item.process.route ? `[${item.process.route}] ` : '';
+          const tag = lk ? `[${lk}] ` : '';
           nodes.push({
             id: item.process.id,
             position: { x: nx, y: FIRST_ROW_Y + r * ROW_H },
@@ -148,7 +150,7 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
 
       rowVals.forEach((rv) => {
         const row = pis.filter((i) => i.process.sort_order === rv);
-        const backbone = row.length === 1 && !row[0].process.route;
+        const backbone = row.length === 1 && !laneKey(row[0].process);
         if (backbone) {
           const b = row[0].process.id;
           if (region.size) closeRegion(b);
@@ -156,7 +158,7 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
           lastBackbone = b;
         } else {
           row.forEach((item) => {
-            const key = item.process.route ?? `__${item.process.id}`;
+            const key = laneKey(item.process) ?? `__${item.process.id}`;
             if (!region.has(key)) region.set(key, []);
             region.get(key)!.push(item.process.id);
           });
@@ -170,7 +172,7 @@ export function FlowCanvas({ items }: { items: CpsProcessStatusItem[] }) {
         exits = routeCols
           .map((rc) => {
             const inCol = pis
-              .filter((i) => i.process.route === rc)
+              .filter((i) => laneKey(i.process) === rc)
               .sort((a, b) => a.process.sort_order - b.process.sort_order);
             return inCol[inCol.length - 1]?.process.id;
           })

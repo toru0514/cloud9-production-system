@@ -34,6 +34,7 @@ export function ProcessEditForm({
   presetRoute,
   presetSortOrder,
   knownRoutes = [],
+  knownLines = [],
   trigger,
 }: {
   process?: CpsProcess;
@@ -41,6 +42,7 @@ export function ProcessEditForm({
   presetRoute?: string;
   presetSortOrder?: number;
   knownRoutes?: string[];
+  knownLines?: string[];
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -54,6 +56,7 @@ export function ProcessEditForm({
     standard_minutes: process?.standard_minutes?.toString() ?? '',
     tools: (process?.tools ?? []).join('、'),
     route: process?.route ?? presetRoute ?? '',
+    product_line: process?.product_line ?? '',
     description: process?.description ?? '',
   });
 
@@ -77,6 +80,7 @@ export function ProcessEditForm({
         .map((t) => t.trim())
         .filter(Boolean),
       route: form.route.trim() || null,
+      product_line: form.product_line.trim() || null,
       description: form.description || null,
     };
     try {
@@ -164,8 +168,27 @@ export function ProcessEditForm({
               />
             </div>
           </div>
+          {form.phase === '製造' && (
+            <div className="grid gap-2">
+              <Label>商品ライン（任意）</Label>
+              <Input
+                list="cps-known-lines"
+                value={form.product_line}
+                onChange={(e) => set('product_line', e.target.value)}
+                placeholder="例: ウッドリング / ウッドバングル / クリスタルウッドリング"
+              />
+              <datalist id="cps-known-lines">
+                {knownLines.map((l) => (
+                  <option key={l} value={l} />
+                ))}
+              </datalist>
+              <p className="text-[11px] text-muted-foreground">
+                製造フローを商品ラインごとの並列レーンに分けるためのグループ。木材の種類ではなく商品の種類で分けます。
+              </p>
+            </div>
+          )}
           <div className="grid gap-2">
-            <Label>ラベル（任意）</Label>
+            <Label>枝ラベル（任意）</Label>
             <Input
               list="cps-known-routes"
               value={form.route}
@@ -178,7 +201,7 @@ export function ProcessEditForm({
               ))}
             </datalist>
             <p className="text-[11px] text-muted-foreground">
-              カードに表示される補助ラベル。並行分岐は本ボード上でドラッグして同じステップに重ねると作れます。
+              同じレーン内での並行分岐（枝1/枝2）のラベル。ドラッグで同じステップに重ねても作れます。
             </p>
           </div>
           <div className="grid gap-2">

@@ -106,6 +106,7 @@ export async function createProcess(
     description: input.description ?? null,
     tools: input.tools ?? [],
     route: input.route ?? null,
+    product_line: input.product_line ?? null,
     created_at: ts,
     updated_at: ts,
   };

@@ -11,6 +11,7 @@ import { formatMinutes } from '@/lib/cps/utils/kpi';
 import {
   ALL_CATEGORIES,
   filterManufacturingByCategory,
+  laneKey,
   manufacturingCategories,
 } from '@/lib/cps/utils/manufacturing';
 import { CategoryFilter } from '@/components/cps/CategoryFilter';
@@ -161,6 +162,13 @@ export function ProcessBoard({ items }: { items: Item[] }) {
       items.map((i) => i.process.route).filter((r): r is string => Boolean(r))
     ),
   ];
+  const knownLines = [
+    ...new Set(
+      items
+        .map((i) => i.process.product_line)
+        .filter((l): l is string => Boolean(l))
+    ),
+  ];
 
   // 製造レーンのカテゴリ一覧 + 選択カテゴリで絞った表示用データ（DnD 対象の local は絞らない）。
   const categories = useMemo(() => manufacturingCategories(local), [local]);
@@ -191,20 +199,22 @@ export function ProcessBoard({ items }: { items: Item[] }) {
     const rowVals = [...new Set(pis.map((i) => i.process.sort_order))].sort(
       (a, b) => a - b
     );
-    const minSortFor = (route: string) =>
+    const minSortFor = (key: string) =>
       Math.min(
-        ...pis.filter((i) => i.process.route === route).map((i) => i.process.sort_order)
+        ...pis
+          .filter((i) => laneKey(i.process) === key)
+          .map((i) => i.process.sort_order)
       );
     const routeCols = [
       ...new Set(
-        pis.map((i) => i.process.route).filter((r): r is string => Boolean(r))
+        pis.map((i) => laneKey(i.process)).filter((r): r is string => Boolean(r))
       ),
     ].sort((a, b) => minSortFor(a) - minSortFor(b) || a.localeCompare(b));
 
     let maxAnon = 0;
     rowVals.forEach((rv) => {
       const row = pis.filter((i) => i.process.sort_order === rv);
-      const nulls = row.filter((i) => !i.process.route);
+      const nulls = row.filter((i) => !laneKey(i.process));
       const backbone = row.length === 1 && nulls.length === 1;
       if (!backbone) maxAnon = Math.max(maxAnon, nulls.length);
     });
@@ -212,17 +222,16 @@ export function ProcessBoard({ items }: { items: Item[] }) {
 
     const rows = rowVals.map((rv) => {
       const nodes = pis.filter((i) => i.process.sort_order === rv);
-      const backbone = nodes.length === 1 && !nodes[0].process.route;
+      const backbone = nodes.length === 1 && !laneKey(nodes[0].process);
       const sorted = [...nodes].sort(
         (a, b) =>
-          (a.process.route ?? '').localeCompare(b.process.route ?? '') ||
+          (laneKey(a.process) ?? '').localeCompare(laneKey(b.process) ?? '') ||
           a.process.name.localeCompare(b.process.name)
       );
       let anon = routeCols.length;
       const placed = sorted.map((item) => {
-        const col = item.process.route
-          ? routeCols.indexOf(item.process.route) + 1
-          : (anon += 1);
+        const key = laneKey(item.process);
+        const col = key ? routeCols.indexOf(key) + 1 : (anon += 1);
         return { item, col };
       });
       return { sortOrder: rv, backbone, placed, multi: nodes.length > 1 };
@@ -354,7 +363,8 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         row.filter((i) => i.process.route).map((i) => i.process.route as string)
       );
       row
-        .filter((i) => !i.process.route)
+        // 商品ライン(product_line)が付いた工程は既に自分のレーンを持つので枝採番の対象外。
+        .filter((i) => !laneKey(i.process))
         .sort((a, b) => a.process.name.localeCompare(b.process.name))
         .forEach((i) => {
           let n = 1;
@@ -373,18 +383,25 @@ export function ProcessBoard({ items }: { items: Item[] }) {
       const next = clone();
       const a = next.find((i) => i.process.id === anchor.id)?.process;
       if (!a) return;
-      // 並行段なら枝(列)を確定させ、子は同じ列を引き継ぐ
+      // 並行段なら枝(列)を確定させ、子は同じレーン（商品ライン / 枝）を引き継ぐ
       normalizePhase(next, a.phase);
       const childRoute = a.route;
+      const childLine = a.product_line;
 
       const created = await apiSend<CpsProcess>('/api/cps/processes', 'POST', {
         name: name.trim(),
         phase: a.phase,
         route: childRoute,
+        product_line: childLine,
         sort_order: a.sort_order,
       });
       next.push({
-        process: { ...created, route: childRoute, sort_order: a.sort_order + 0.5 },
+        process: {
+          ...created,
+          route: childRoute,
+          product_line: childLine,
+          sort_order: a.sort_order + 0.5,
+        },
         recent_avg_minutes: null,
         last_logged_at: null,
         status: 'normal',
@@ -489,6 +506,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
             <ProcessEditForm
               process={process}
               knownRoutes={knownRoutes}
+              knownLines={knownLines}
               trigger={
                 <button
                   className="rounded p-0.5 text-muted-foreground hover:bg-accent"
@@ -502,6 +520,11 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         </div>
         <div className="flex items-center justify-between gap-1 pl-1.5 pt-0.5">
           <span className="truncate text-[11px] text-muted-foreground">
+            {process.product_line && (
+              <span className="mr-1 rounded bg-sky-100 px-1 text-[10px] text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                {process.product_line}
+              </span>
+            )}
             {process.route && (
               <span className="mr-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700 dark:bg-violet-950 dark:text-violet-300">
                 {process.route}
@@ -627,6 +650,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
                   <ProcessEditForm
                     presetPhase={phase}
                     knownRoutes={knownRoutes}
+                    knownLines={knownLines}
                     trigger={
                       <button
                         className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"

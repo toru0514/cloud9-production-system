@@ -36,7 +36,8 @@ export interface CpsProcess {
   status: ProcessStatus;
   description: string | null;
   tools: string[];
-  route: string | null; // 同一フェーズ内の並行ルート（レーン）。null = メイン
+  route: string | null; // 同一フェーズ内の並行ブランチ（枝）ラベル。null = メイン
+  product_line: string | null; // 製造フェーズの商品ライン（レーン）。route(枝)とは別軸。null = 未分類
   created_at: string;
   updated_at: string;
 }

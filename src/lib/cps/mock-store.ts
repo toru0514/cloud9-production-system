@@ -48,16 +48,16 @@ function buildSeedDb(): MockDb {
   const products = buildSeedProducts();
   const ts = new Date().toISOString();
 
-  // 共通工程（製造以外, route = null）は名前で一意。
+  // 共通工程（製造以外, product_line 無し）は名前で一意。
   const findShared = (name: string) =>
-    processes.find((p) => p.name === name && !p.route)!;
-  // 製造工程は同じ工程名がカテゴリごとに複数あるため、商品のカテゴリで絞り込む。
-  const catOf = (productId: string) =>
+    processes.find((p) => p.name === name && !p.product_line)!;
+  // 製造工程は同じ工程名が商品ラインごとに複数あるため、商品のカテゴリ（=ライン）で絞り込む。
+  const lineOf = (productId: string) =>
     products.find((p) => p.id === productId)?.category ?? null;
   const findMfg = (productId: string, name: string) => {
-    const category = catOf(productId);
+    const line = lineOf(productId);
     return (
-      processes.find((p) => p.route === category && p.name === name) ??
+      processes.find((p) => p.product_line === line && p.name === name) ??
       findShared(name)
     );
   };
