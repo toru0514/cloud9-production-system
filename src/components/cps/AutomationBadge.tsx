@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { apiGet, apiSend } from '@/lib/cps/client';
+import { AutomationLabelManager } from '@/components/cps/AutomationLabelManager';
 import {
   automationMeta,
   BUILTIN_AUTOMATION_LABELS,
@@ -21,7 +22,7 @@ import {
 } from '@/lib/cps/automation';
 import type { CpsAutomationLog, CpsProcess } from '@/types/cps';
 import { cn } from '@/lib/utils';
-import { History, Plus } from 'lucide-react';
+import { History, Plus, Tags } from 'lucide-react';
 import { toast } from 'sonner';
 
 function fmtDate(iso: string) {
@@ -234,7 +235,14 @@ export function AutomationBadge({
             placeholder="変更の理由・メモ（任意）例: 研磨治具を導入して角度を固定"
             rows={2}
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <AutomationLabelManager
+              trigger={
+                <Button type="button" variant="ghost" size="sm">
+                  <Tags className="size-4" /> 区分を管理
+                </Button>
+              }
+            />
             <Button
               onClick={save}
               disabled={saving || !selected || selected === current}

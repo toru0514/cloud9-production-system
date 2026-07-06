@@ -5,6 +5,10 @@
 import { isSupabaseConfigured } from '@/lib/cps/config';
 import { getSupabaseAdmin } from '@/lib/cps/supabase-client';
 import { getMockDb, mockId } from '@/lib/cps/mock-store';
+import {
+  BUILTIN_AUTOMATION_LABELS,
+  isBuiltinAutomationLabel,
+} from '@/lib/cps/automation';
 import { calcProcessStatus } from '@/lib/cps/utils/status';
 import {
   startOfMonth,
@@ -196,6 +200,120 @@ export async function setAutomation(
   }
   getMockDb().automation_logs.unshift(row);
   return { process, log: row };
+}
+
+export interface AutomationLabelUsage {
+  label: string;
+  isBuiltin: boolean;
+  processCount: number; // 現在この区分を設定している工程数
+  logCount: number; // 履歴での使用数
+}
+
+// 使用中の全区分（組込み＋カスタム）と使用状況を集計。区分管理UI用。
+export async function listAutomationLabelUsage(): Promise<
+  AutomationLabelUsage[]
+> {
+  const [processes, logs] = await Promise.all([
+    listProcesses(),
+    listAutomationLogs(),
+  ]);
+  const map = new Map<string, { p: number; l: number }>();
+  for (const lbl of BUILTIN_AUTOMATION_LABELS) map.set(lbl, { p: 0, l: 0 });
+  for (const pr of processes) {
+    if (!pr.automation) continue;
+    const e = map.get(pr.automation) ?? { p: 0, l: 0 };
+    e.p += 1;
+    map.set(pr.automation, e);
+  }
+  for (const lg of logs) {
+    const e = map.get(lg.label) ?? { p: 0, l: 0 };
+    e.l += 1;
+    map.set(lg.label, e);
+  }
+  return [...map.entries()]
+    .map(([label, v]) => ({
+      label,
+      isBuiltin: isBuiltinAutomationLabel(label),
+      processCount: v.p,
+      logCount: v.l,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.isBuiltin) - Number(a.isBuiltin) ||
+        a.label.localeCompare(b.label)
+    );
+}
+
+// カスタム区分の名前変更: 現在値(processes.automation)と履歴(logs.label)を一括更新。
+// to が既存区分なら統合される。
+export async function renameAutomationLabel(
+  from: string,
+  to: string
+): Promise<{ processes: number; logs: number }> {
+  if (isSupabaseConfigured()) {
+    const admin = getSupabaseAdmin();
+    const { data: pRows, error: pErr } = await admin
+      .from('cps_processes')
+      .update({ automation: to, updated_at: nowISO() })
+      .eq('automation', from)
+      .select('id');
+    if (pErr) throw pErr;
+    const { data: lRows, error: lErr } = await admin
+      .from('cps_automation_logs')
+      .update({ label: to })
+      .eq('label', from)
+      .select('id');
+    if (lErr) throw lErr;
+    return { processes: pRows?.length ?? 0, logs: lRows?.length ?? 0 };
+  }
+  const db = getMockDb();
+  let p = 0;
+  let l = 0;
+  for (const pr of db.processes)
+    if (pr.automation === from) {
+      pr.automation = to;
+      pr.updated_at = nowISO();
+      p += 1;
+    }
+  for (const lg of db.automation_logs)
+    if (lg.label === from) {
+      lg.label = to;
+      l += 1;
+    }
+  return { processes: p, logs: l };
+}
+
+// カスタム区分の削除: 使用中の工程は未設定(null)に戻し、履歴からも削除。
+export async function deleteAutomationLabel(
+  label: string
+): Promise<{ processes: number; logs: number }> {
+  if (isSupabaseConfigured()) {
+    const admin = getSupabaseAdmin();
+    const { data: pRows, error: pErr } = await admin
+      .from('cps_processes')
+      .update({ automation: null, updated_at: nowISO() })
+      .eq('automation', label)
+      .select('id');
+    if (pErr) throw pErr;
+    const { data: lRows, error: lErr } = await admin
+      .from('cps_automation_logs')
+      .delete()
+      .eq('label', label)
+      .select('id');
+    if (lErr) throw lErr;
+    return { processes: pRows?.length ?? 0, logs: lRows?.length ?? 0 };
+  }
+  const db = getMockDb();
+  let p = 0;
+  for (const pr of db.processes)
+    if (pr.automation === label) {
+      pr.automation = null;
+      pr.updated_at = nowISO();
+      p += 1;
+    }
+  const before = db.automation_logs.length;
+  db.automation_logs = db.automation_logs.filter((lg) => lg.label !== label);
+  return { processes: p, logs: before - db.automation_logs.length };
 }
 
 /* ============================================================

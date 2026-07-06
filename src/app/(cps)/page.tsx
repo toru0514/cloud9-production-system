@@ -9,8 +9,9 @@ import { getDashboard } from '@/lib/cps/supabase';
 import { KpiSummary } from '@/components/cps/KpiSummary';
 import { ProcessBoard } from '@/components/cps/ProcessBoard';
 import { ProcessEditForm } from '@/components/cps/ProcessEditForm';
+import { AutomationLabelManager } from '@/components/cps/AutomationLabelManager';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Flame, Plus, Workflow } from 'lucide-react';
+import { AlertTriangle, Flame, Plus, Tags, Workflow } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,13 @@ export default async function DashboardPage() {
               <Workflow className="size-4" /> 図で見る
             </Button>
           </Link>
+          <AutomationLabelManager
+            trigger={
+              <Button variant="outline">
+                <Tags className="size-4" /> 区分を管理
+              </Button>
+            }
+          />
           <ProcessEditForm
             trigger={
               <Button>
