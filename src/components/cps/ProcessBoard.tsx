@@ -170,6 +170,17 @@ export function ProcessBoard({ items }: { items: Item[] }) {
         .filter((l): l is string => Boolean(l))
     ),
   ];
+  // 全工程で使われている自動化区分（カスタム含む）をプリセット候補として共有
+  const knownAutomationLabels = useMemo(
+    () => [
+      ...new Set(
+        local
+          .map((i) => i.process.automation)
+          .filter((a): a is string => Boolean(a))
+      ),
+    ],
+    [local]
+  );
 
   // 製造レーンのカテゴリ一覧 + 選択カテゴリで絞った表示用データ（DnD 対象の local は絞らない）。
   const categories = useMemo(() => manufacturingCategories(local), [local]);
@@ -551,7 +562,10 @@ export function ProcessBoard({ items }: { items: Item[] }) {
           )}
         </div>
         <div className="mt-1 flex items-center pl-1.5">
-          <AutomationBadge process={process} />
+          <AutomationBadge
+            process={process}
+            knownLabels={knownAutomationLabels}
+          />
         </div>
         {isBottleneck && (
           <div className="mt-1 flex items-center gap-1 pl-1.5 text-[10px] font-bold text-red-600">

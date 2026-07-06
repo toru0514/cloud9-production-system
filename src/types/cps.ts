@@ -17,8 +17,10 @@ export type ProcessPhase =
 export type ProcessStatus = 'normal' | 'caution' | 'stopped';
 
 // 工程の自動化区分（現状）。改善が進むと 手作業 → 治具化 → 自動化 と遷移していく想定。
-// 外注は自社では作業しない（委託）状態。変更は cps_automation_logs に履歴として残す。
-export type AutomationLabel = '手作業' | '治具化' | '自動化' | '外注';
+// 組込みは 手作業/治具化/自動化/効率化検討済/外注 の5種だが、UI から任意の区分を
+// 追加できるため型は string。組込みの定義・配色は @/lib/cps/automation を参照。
+// 変更は cps_automation_logs に履歴として残す。
+export type AutomationLabel = string;
 
 export type ImprovementStatus = 'proposed' | 'in_progress' | 'done';
 

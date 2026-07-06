@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -11,10 +11,15 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { apiGet, apiSend } from '@/lib/cps/client';
-import { AUTOMATION_META, AUTOMATION_ORDER } from '@/lib/cps/automation';
-import type { AutomationLabel, CpsAutomationLog, CpsProcess } from '@/types/cps';
+import {
+  automationMeta,
+  BUILTIN_AUTOMATION_LABELS,
+  MAX_AUTOMATION_LABEL_LEN,
+} from '@/lib/cps/automation';
+import type { CpsAutomationLog, CpsProcess } from '@/types/cps';
 import { cn } from '@/lib/utils';
 import { History, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -30,23 +35,42 @@ function fmtDate(iso: string) {
 export function AutomationBadge({
   process,
   size = 'sm',
+  knownLabels = [],
 }: {
   process: CpsProcess;
   size?: 'sm' | 'md';
+  /** 他工程で使われているカスタム区分（プリセットに合流表示） */
+  knownLabels?: string[];
 }) {
   const router = useRouter();
   const current = process.automation;
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState<CpsAutomationLog[] | null>(null);
-  const [selected, setSelected] = useState<AutomationLabel | null>(current);
+  const [selected, setSelected] = useState<string | null>(current);
   const [note, setNote] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [added, setAdded] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // 表示する区分の選択肢: 組込み + 他工程のカスタム + 履歴 + 現在値 + このダイアログで追加した分
+  const options = useMemo(() => {
+    const all = [
+      ...BUILTIN_AUTOMATION_LABELS,
+      ...knownLabels,
+      ...(logs?.map((l) => l.label) ?? []),
+      ...(current ? [current] : []),
+      ...added,
+    ];
+    return [...new Set(all.map((s) => s.trim()).filter(Boolean))];
+  }, [knownLabels, logs, current, added]);
 
   const onOpenChange = async (v: boolean) => {
     setOpen(v);
     if (v) {
       setSelected(process.automation);
       setNote('');
+      setNewLabel('');
+      setAdded([]);
       setLogs(null);
       try {
         const data = await apiGet<CpsAutomationLog[]>(
@@ -58,6 +82,18 @@ export function AutomationBadge({
         setLogs([]);
       }
     }
+  };
+
+  const addLabel = () => {
+    const t = newLabel.trim();
+    if (!t) return;
+    if (t.length > MAX_AUTOMATION_LABEL_LEN) {
+      toast.error(`区分名は${MAX_AUTOMATION_LABEL_LEN}文字以内で入力してください`);
+      return;
+    }
+    if (!options.includes(t)) setAdded((a) => [...a, t]);
+    setSelected(t);
+    setNewLabel('');
   };
 
   const save = async () => {
@@ -90,18 +126,15 @@ export function AutomationBadge({
       size === 'md'
         ? 'gap-1 px-2 py-0.5 text-xs'
         : 'gap-0.5 px-1 py-px text-[10px]';
+    const iconCls = size === 'md' ? 'size-3.5' : 'size-3';
     if (current) {
-      const m = AUTOMATION_META[current];
+      const m = automationMeta(current);
       const Icon = m.icon;
       return (
         <span
-          className={cn(
-            'inline-flex items-center rounded font-medium',
-            m.chip,
-            cls
-          )}
+          className={cn('inline-flex items-center rounded font-medium', m.chip, cls)}
         >
-          <Icon className={size === 'md' ? 'size-3.5' : 'size-3'} />
+          <Icon className={iconCls} />
           {current}
         </span>
       );
@@ -113,7 +146,7 @@ export function AutomationBadge({
           cls
         )}
       >
-        <Plus className={size === 'md' ? 'size-3.5' : 'size-3'} />
+        <Plus className={iconCls} />
         区分
       </span>
     );
@@ -139,45 +172,62 @@ export function AutomationBadge({
             <History className="size-4" />「{process.name}」の自動化区分
           </DialogTitle>
           <DialogDescription>
-            現状の区分を選んで記録すると、下に履歴として残ります。
+            現状の区分を選んで記録すると、下に履歴として残ります。区分は自由に追加できます。
           </DialogDescription>
         </DialogHeader>
 
         {/* 区分の選択 */}
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            {AUTOMATION_ORDER.map((label) => {
-              const m = AUTOMATION_META[label];
+          <div className="flex flex-wrap gap-2">
+            {options.map((label) => {
+              const m = automationMeta(label);
               const Icon = m.icon;
               const active = selected === label;
               return (
                 <button
                   key={label}
                   type="button"
+                  title={m.desc}
                   onClick={() => setSelected(label)}
                   className={cn(
-                    'flex items-start gap-2 rounded-lg border p-2 text-left transition-colors',
+                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors',
                     active
-                      ? 'border-transparent ring-2 ring-offset-1 ' + m.solid
+                      ? 'border-transparent ' + m.solid
                       : 'hover:bg-accent'
                   )}
                 >
-                  <Icon className="mt-0.5 size-4 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold">{label}</span>
-                    <span
-                      className={cn(
-                        'block text-[11px]',
-                        active ? 'text-white/80' : 'text-muted-foreground'
-                      )}
-                    >
-                      {m.desc}
-                    </span>
-                  </span>
+                  <Icon className="size-4" />
+                  {label}
                 </button>
               );
             })}
           </div>
+
+          {/* 新しい区分を追加 */}
+          <div className="flex items-center gap-2">
+            <Input
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addLabel();
+                }
+              }}
+              maxLength={MAX_AUTOMATION_LABEL_LEN}
+              placeholder="新しい区分を追加（例: 半自動化）"
+              className="h-9"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addLabel}
+              disabled={!newLabel.trim()}
+            >
+              <Plus className="size-4" /> 追加
+            </Button>
+          </div>
+
           <Textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -212,7 +262,7 @@ export function AutomationBadge({
           ) : (
             <ol className="flex flex-col gap-2">
               {logs.map((log, i) => {
-                const m = AUTOMATION_META[log.label];
+                const m = automationMeta(log.label);
                 const Icon = m.icon;
                 return (
                   <li key={log.id} className="flex items-start gap-2">

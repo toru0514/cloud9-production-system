@@ -48,7 +48,7 @@ export const manufacturingByCategory: CategoryManufacturing[] = [
       { key: 'cnc', name: 'CNC', sort_order: 3, standard_minutes: 45, tools: ['CNCルーター'], automation: '自動化' },
       { key: 'sand', name: '研磨', sort_order: 4, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'], automation: '治具化' },
       { key: 'paint', name: '塗装', sort_order: 5, standard_minutes: 20, tools: ['オイル', '刷毛'], automation: '手作業' },
-      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '手作業' },
+      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '効率化検討済' },
     ],
   },
   {
@@ -60,7 +60,7 @@ export const manufacturingByCategory: CategoryManufacturing[] = [
       { key: 'cnc', name: 'CNC', sort_order: 3, standard_minutes: 50, tools: ['CNCルーター'], automation: '自動化' },
       { key: 'sand', name: '研磨', sort_order: 4, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'], automation: '治具化' },
       { key: 'paint', name: '塗装', sort_order: 5, standard_minutes: 20, tools: ['オイル', '刷毛'], automation: '手作業' },
-      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '手作業' },
+      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '効率化検討済' },
     ],
   },
   {
@@ -71,7 +71,7 @@ export const manufacturingByCategory: CategoryManufacturing[] = [
       { key: '3dp', name: '3Dプリント', sort_order: 3, standard_minutes: 120, tools: ['3Dプリンター'], automation: '自動化' },
       { key: 'resin', name: 'レジン注入', sort_order: 4, standard_minutes: 40, tools: ['レジン', '真空脱泡'], automation: '手作業' },
       { key: 'sand', name: '研磨', sort_order: 5, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'], automation: '治具化' },
-      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '手作業' },
+      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '効率化検討済' },
     ],
   },
 ];

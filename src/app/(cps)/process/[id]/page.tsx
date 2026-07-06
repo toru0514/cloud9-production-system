@@ -87,7 +87,17 @@ export default async function ProcessDetailPage({
           <Badge variant="outline" className={meta.color}>
             {meta.label}
           </Badge>
-          <AutomationBadge process={process} size="md" />
+          <AutomationBadge
+            process={process}
+            size="md"
+            knownLabels={[
+              ...new Set(
+                statusItems
+                  .map((s) => s.process.automation)
+                  .filter((a): a is string => Boolean(a))
+              ),
+            ]}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           <ProcessEditForm

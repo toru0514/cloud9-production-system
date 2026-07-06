@@ -168,6 +168,17 @@ function buildSeedDb(): MockDb {
       ],
     },
     {
+      process: findMfg('prod-maple-ring', '品質確認'),
+      history: [
+        { label: '手作業', days: 90 },
+        {
+          label: '効率化検討済',
+          note: '自動検査も検討したが、目視の方が確実で現状維持と判断',
+          days: 25,
+        },
+      ],
+    },
+    {
       process: findShared('動画生成'),
       history: [
         { label: '手作業', days: 60 },
