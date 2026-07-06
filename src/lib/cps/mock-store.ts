@@ -10,6 +10,8 @@ import type {
   CpsProcess,
   CpsProduct,
   CpsTask,
+  CpsWorkCombination,
+  CpsWorkElement,
   CpsWorkLog,
 } from '@/types/cps';
 import {
@@ -25,6 +27,8 @@ export interface MockDb {
   tasks: CpsTask[];
   kpi_daily: CpsKpiDaily[];
   automation_logs: CpsAutomationLog[];
+  work_combinations: CpsWorkCombination[];
+  work_elements: CpsWorkElement[];
 }
 
 let counter = 1000;
@@ -204,8 +208,40 @@ function buildSeedDb(): MockDb {
     }))
   );
 
-  // products の updated_at を整える
-  void ts;
+  // 標準作業組合せ票（デモ）: ウッドリングの研磨セルを分解した1枚。
+  // 帳票の実例（必要数700個 / 稼働27600秒 → TT39秒、CT43秒 = タクト割れ）を再現する。
+  const sandProc = findMfg('prod-maple-ring', '研磨');
+  const combo: CpsWorkCombination = {
+    id: 'wc-ring-sand',
+    name: '研磨セル',
+    process_id: sandProc.id,
+    product_line: 'ウッドリング',
+    required_qty: 700,
+    operating_seconds: 27600, // 7時間40分
+    note: '1直の稼働時間 7時間40分。CT(43) > TT(39) のタクト割れ。手待ち・歩行のムダを改善対象として検討中。',
+    created_at: ts,
+    updated_at: ts,
+  };
+  const comboRows: [string, number, number, number][] = [
+    ['ワーク(素材)を2つ取り治具に固定する', 17, 0, 2],
+    ['ビスと工具を取り素材をビス止めする', 8, 0, 2],
+    ['起動ボタンを押し、研磨する', 2, 10, 2],
+    ['完成品を収容箱に置く', 8, 0, 2],
+  ];
+  const work_combinations: CpsWorkCombination[] = [combo];
+  const work_elements: CpsWorkElement[] = comboRows.map(
+    ([name, m, a, w], i) => ({
+      id: mockId('we'),
+      combination_id: combo.id,
+      seq: i + 1,
+      name,
+      manual_seconds: m,
+      auto_seconds: a,
+      walk_seconds: w,
+      sort_order: i + 1,
+      created_at: ts,
+    })
+  );
 
   return {
     processes,
@@ -215,6 +251,8 @@ function buildSeedDb(): MockDb {
     tasks,
     kpi_daily,
     automation_logs,
+    work_combinations,
+    work_elements,
   };
 
   function mkLog(

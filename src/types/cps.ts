@@ -120,6 +120,39 @@ export interface CpsTask {
   updated_at: string;
 }
 
+// 標準作業組合せ票（TPS 標準3票の一つ）。1工程を作業要素に分解し、
+// 手作業・自動送り・歩行の時間をタクトタイムに対して組み合わせる帳票のヘッダー。
+export interface CpsWorkCombination {
+  id: string;
+  name: string;
+  process_id: string | null; // 分解対象の工程（任意）
+  product_line: string | null; // 商品ライン（タクトはライン単位）
+  required_qty: number; // 必要数（個/直）
+  operating_seconds: number; // 稼働時間（秒/直）
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// 組合せ票の各行（作業要素）。手・送・歩を秒で保持し、グラフの線はここから算出。
+export interface CpsWorkElement {
+  id: string;
+  combination_id: string;
+  seq: number; // 作業順
+  name: string; // 作業内容
+  manual_seconds: number; // 手作業（実線）
+  auto_seconds: number; // 自動送り（破線）
+  walk_seconds: number; // 歩行（波線）
+  sort_order: number;
+  created_at: string;
+}
+
+// ヘッダー＋要素をまとめた詳細型（票1枚分）
+export interface CpsWorkCombinationDetail {
+  combination: CpsWorkCombination;
+  elements: CpsWorkElement[];
+}
+
 export interface CpsKpiDaily {
   id?: string;
   date: string;

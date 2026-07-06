@@ -9,6 +9,7 @@ import {
   Lightbulb,
   BarChart3,
   Clapperboard,
+  GanttChartSquare,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils';
 const items = [
   { href: '/', label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/flow', label: '工程マップ', icon: Workflow },
+  { href: '/standard-work', label: '標準作業', icon: GanttChartSquare },
   { href: '/products', label: '商品', icon: Package },
   { href: '/contents', label: 'コンテンツ', icon: Clapperboard },
   { href: '/improvements', label: '改善', icon: Lightbulb },
