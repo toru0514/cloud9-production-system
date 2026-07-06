@@ -16,6 +16,10 @@ export type ProcessPhase =
 
 export type ProcessStatus = 'normal' | 'caution' | 'stopped';
 
+// 工程の自動化区分（現状）。改善が進むと 手作業 → 治具化 → 自動化 と遷移していく想定。
+// 外注は自社では作業しない（委託）状態。変更は cps_automation_logs に履歴として残す。
+export type AutomationLabel = '手作業' | '治具化' | '自動化' | '外注';
+
 export type ImprovementStatus = 'proposed' | 'in_progress' | 'done';
 
 export type ProductPhase =
@@ -38,8 +42,18 @@ export interface CpsProcess {
   tools: string[];
   route: string | null; // 同一フェーズ内の並行ブランチ（枝）ラベル。null = メイン
   product_line: string | null; // 製造フェーズの商品ライン（レーン）。route(枝)とは別軸。null = 未分類
+  automation: AutomationLabel | null; // 現状の自動化区分。null = 未設定
   created_at: string;
   updated_at: string;
+}
+
+// 自動化区分の変更履歴（append-only）。工程の automation を書き換えるたびに1行追加。
+export interface CpsAutomationLog {
+  id: string;
+  process_id: string;
+  label: AutomationLabel; // この時点で設定された区分
+  note: string | null; // 変更理由・メモ（任意）
+  created_at: string;
 }
 
 export interface CpsWorkLog {

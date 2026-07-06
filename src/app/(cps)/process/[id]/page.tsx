@@ -22,6 +22,7 @@ import { ProcessEditForm } from '@/components/cps/ProcessEditForm';
 import { Markdown } from '@/components/cps/Markdown';
 import { ImprovementStatusControl } from '@/components/cps/ImprovementStatusControl';
 import { Button } from '@/components/ui/button';
+import { AutomationBadge } from '@/components/cps/AutomationBadge';
 import { formatMinutes } from '@/lib/cps/utils/kpi';
 import { statusMeta } from '@/lib/cps/utils/status';
 import { ChevronLeft, Pencil, Wrench } from 'lucide-react';
@@ -86,6 +87,7 @@ export default async function ProcessDetailPage({
           <Badge variant="outline" className={meta.color}>
             {meta.label}
           </Badge>
+          <AutomationBadge process={process} size="md" />
         </div>
         <div className="flex flex-wrap gap-2">
           <ProcessEditForm

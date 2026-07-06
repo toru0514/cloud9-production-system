@@ -1,7 +1,7 @@
 // CPS 初期データ（工程マスタ + デモ用サンプル）
 // Supabase 未設定時の内蔵モックデータとしても利用される。
 
-import type { CpsProcess, CpsProduct } from '@/types/cps';
+import type { AutomationLabel, CpsProcess, CpsProduct } from '@/types/cps';
 
 const now = () => new Date().toISOString();
 
@@ -15,6 +15,7 @@ interface ProcessSeed {
   description?: string;
   route?: string | null;
   product_line?: string | null;
+  automation?: AutomationLabel;
 }
 
 // ---- 製造工程は「商品ライン（カテゴリ）」ごとに分ける ----
@@ -27,6 +28,7 @@ interface ManufacturingStep {
   sort_order: number;
   standard_minutes: number | null;
   tools?: string[];
+  automation?: AutomationLabel;
 }
 
 interface CategoryManufacturing {
@@ -41,35 +43,35 @@ export const manufacturingByCategory: CategoryManufacturing[] = [
     category: 'ウッドリング',
     catKey: 'ring',
     steps: [
-      { key: 'mat', name: '材料選定', sort_order: 1, standard_minutes: 10 },
-      { key: 'cut', name: '切断', sort_order: 2, standard_minutes: 20, tools: ['バンドソー'] },
-      { key: 'cnc', name: 'CNC', sort_order: 3, standard_minutes: 45, tools: ['CNCルーター'] },
-      { key: 'sand', name: '研磨', sort_order: 4, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'] },
-      { key: 'paint', name: '塗装', sort_order: 5, standard_minutes: 20, tools: ['オイル', '刷毛'] },
-      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10 },
+      { key: 'mat', name: '材料選定', sort_order: 1, standard_minutes: 10, automation: '手作業' },
+      { key: 'cut', name: '切断', sort_order: 2, standard_minutes: 20, tools: ['バンドソー'], automation: '治具化' },
+      { key: 'cnc', name: 'CNC', sort_order: 3, standard_minutes: 45, tools: ['CNCルーター'], automation: '自動化' },
+      { key: 'sand', name: '研磨', sort_order: 4, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'], automation: '治具化' },
+      { key: 'paint', name: '塗装', sort_order: 5, standard_minutes: 20, tools: ['オイル', '刷毛'], automation: '手作業' },
+      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '手作業' },
     ],
   },
   {
     category: 'ウッドバングル',
     catKey: 'bangle',
     steps: [
-      { key: 'mat', name: '材料選定', sort_order: 1, standard_minutes: 10 },
-      { key: 'cut', name: '切断', sort_order: 2, standard_minutes: 25, tools: ['バンドソー'] },
-      { key: 'cnc', name: 'CNC', sort_order: 3, standard_minutes: 50, tools: ['CNCルーター'] },
-      { key: 'sand', name: '研磨', sort_order: 4, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'] },
-      { key: 'paint', name: '塗装', sort_order: 5, standard_minutes: 20, tools: ['オイル', '刷毛'] },
-      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10 },
+      { key: 'mat', name: '材料選定', sort_order: 1, standard_minutes: 10, automation: '手作業' },
+      { key: 'cut', name: '切断', sort_order: 2, standard_minutes: 25, tools: ['バンドソー'], automation: '治具化' },
+      { key: 'cnc', name: 'CNC', sort_order: 3, standard_minutes: 50, tools: ['CNCルーター'], automation: '自動化' },
+      { key: 'sand', name: '研磨', sort_order: 4, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'], automation: '治具化' },
+      { key: 'paint', name: '塗装', sort_order: 5, standard_minutes: 20, tools: ['オイル', '刷毛'], automation: '手作業' },
+      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '手作業' },
     ],
   },
   {
     category: 'クリスタルウッドリング',
     catKey: 'crystal',
     steps: [
-      { key: 'mat', name: '材料選定', sort_order: 1, standard_minutes: 15 },
-      { key: '3dp', name: '3Dプリント', sort_order: 3, standard_minutes: 120, tools: ['3Dプリンター'] },
-      { key: 'resin', name: 'レジン注入', sort_order: 4, standard_minutes: 40, tools: ['レジン', '真空脱泡'] },
-      { key: 'sand', name: '研磨', sort_order: 5, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'] },
-      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10 },
+      { key: 'mat', name: '材料選定', sort_order: 1, standard_minutes: 15, automation: '手作業' },
+      { key: '3dp', name: '3Dプリント', sort_order: 3, standard_minutes: 120, tools: ['3Dプリンター'], automation: '自動化' },
+      { key: 'resin', name: 'レジン注入', sort_order: 4, standard_minutes: 40, tools: ['レジン', '真空脱泡'], automation: '手作業' },
+      { key: 'sand', name: '研磨', sort_order: 5, standard_minutes: 30, tools: ['サンダー #120', '#240', '#400'], automation: '治具化' },
+      { key: 'qc', name: '品質確認', sort_order: 6, standard_minutes: 10, automation: '手作業' },
     ],
   },
 ];
@@ -82,12 +84,12 @@ const sharedProcessSeeds: ProcessSeed[] = [
   { id: 'p-select', name: '写真選別', phase: 'コンテンツ', sort_order: 12, standard_minutes: 10, tools: [] },
   { id: 'p-ig', name: 'Instagram投稿生成', phase: 'コンテンツ', sort_order: 13, standard_minutes: 5, tools: [] },
   { id: 'p-yt', name: 'YouTube台本生成', phase: 'コンテンツ', sort_order: 14, standard_minutes: 10, tools: [] },
-  { id: 'p-video', name: '動画生成', phase: 'コンテンツ', sort_order: 15, standard_minutes: 30, tools: [] },
+  { id: 'p-video', name: '動画生成', phase: 'コンテンツ', sort_order: 15, standard_minutes: 30, tools: [], automation: '自動化' },
   { id: 'p-schedule', name: '投稿予約', phase: 'コンテンツ', sort_order: 16, standard_minutes: 5, tools: [] },
   // 販売工程
   { id: 'p-order', name: '受注確認', phase: '販売', sort_order: 20, standard_minutes: 5, tools: [] },
-  { id: 'p-pack', name: '梱包', phase: '販売', sort_order: 21, standard_minutes: 10, tools: ['緩衝材', '箱'] },
-  { id: 'p-ship', name: '発送', phase: '販売', sort_order: 22, standard_minutes: 10, tools: [] },
+  { id: 'p-pack', name: '梱包', phase: '販売', sort_order: 21, standard_minutes: 10, tools: ['緩衝材', '箱'], automation: '治具化' },
+  { id: 'p-ship', name: '発送', phase: '販売', sort_order: 22, standard_minutes: 10, tools: [], automation: '外注' },
 ];
 
 // カテゴリ別 製造工程を ProcessSeed に展開（id は `p-<catKey>-<stepKey>` で一意化、
@@ -101,6 +103,7 @@ const manufacturingProcessSeeds: ProcessSeed[] = manufacturingByCategory.flatMap
     standard_minutes: s.standard_minutes,
     tools: s.tools,
     product_line: cat.category,
+    automation: s.automation,
   }))
 );
 
@@ -123,6 +126,7 @@ export function buildSeedProcesses(): CpsProcess[] {
     tools: s.tools ?? [],
     route: s.route ?? null,
     product_line: s.product_line ?? null,
+    automation: s.automation ?? null,
     created_at: ts,
     updated_at: ts,
   }));

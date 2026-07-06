@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProcessEditForm } from '@/components/cps/ProcessEditForm';
+import { AutomationBadge } from '@/components/cps/AutomationBadge';
 import { apiSend } from '@/lib/cps/client';
 import { PHASE_ORDER, PHASE_DESC } from '@/lib/cps/phases';
 import { statusMeta } from '@/lib/cps/utils/status';
@@ -151,7 +152,7 @@ export function ProcessBoard({ items }: { items: Item[] }) {
   const sig = items
     .map(
       (i) =>
-        `${i.process.id}:${i.process.phase}:${i.process.sort_order}:${i.process.route ?? ''}`
+        `${i.process.id}:${i.process.phase}:${i.process.sort_order}:${i.process.route ?? ''}:${i.process.automation ?? ''}`
     )
     .join('|');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -548,6 +549,9 @@ export function ProcessBoard({ items }: { items: Item[] }) {
               {ratio.toFixed(2)}×
             </span>
           )}
+        </div>
+        <div className="mt-1 flex items-center pl-1.5">
+          <AutomationBadge process={process} />
         </div>
         {isBottleneck && (
           <div className="mt-1 flex items-center gap-1 pl-1.5 text-[10px] font-bold text-red-600">

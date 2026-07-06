@@ -12,6 +12,8 @@ import {
   sumKpi,
 } from '@/lib/cps/utils/kpi';
 import type {
+  AutomationLabel,
+  CpsAutomationLog,
   CpsBottleneckCandidate,
   CpsDashboard,
   CpsImprovement,
@@ -107,6 +109,7 @@ export async function createProcess(
     tools: input.tools ?? [],
     route: input.route ?? null,
     product_line: input.product_line ?? null,
+    automation: input.automation ?? null,
     created_at: ts,
     updated_at: ts,
   };
@@ -137,6 +140,62 @@ export async function deleteProcess(id: string): Promise<void> {
   const db = getMockDb();
   const idx = db.processes.findIndex((p) => p.id === id);
   if (idx >= 0) db.processes.splice(idx, 1);
+}
+
+/* ============================================================
+ * 自動化区分の履歴 (automation_logs)
+ * ============================================================ */
+
+export async function listAutomationLogs(
+  processId?: string
+): Promise<CpsAutomationLog[]> {
+  if (isSupabaseConfigured()) {
+    let q = getSupabaseAdmin()
+      .from('cps_automation_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (processId) q = q.eq('process_id', processId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? []) as CpsAutomationLog[];
+  }
+  const logs = getMockDb().automation_logs;
+  const filtered = processId
+    ? logs.filter((l) => l.process_id === processId)
+    : logs;
+  return [...filtered].sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? '')
+  );
+}
+
+// 工程の現状区分を更新し、履歴を1行追加する（現状ラベルと履歴は常に一致）。
+export async function setAutomation(
+  processId: string,
+  label: AutomationLabel,
+  note?: string | null
+): Promise<{ process: CpsProcess; log: CpsAutomationLog }> {
+  const ts = nowISO();
+  const process = await updateProcess(processId, { automation: label });
+  const row: CpsAutomationLog = {
+    id: mockId('auto'),
+    process_id: processId,
+    label,
+    note: note ?? null,
+    created_at: ts,
+  };
+  if (isSupabaseConfigured()) {
+    const { id: _omit, ...insert } = row;
+    void _omit;
+    const { data, error } = await getSupabaseAdmin()
+      .from('cps_automation_logs')
+      .insert(insert)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return { process, log: data as CpsAutomationLog };
+  }
+  getMockDb().automation_logs.unshift(row);
+  return { process, log: row };
 }
 
 /* ============================================================

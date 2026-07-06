@@ -3,6 +3,8 @@
 // 注意: サーバープロセス内でのみ永続（再起動で初期化）。本番は Supabase を設定すること。
 
 import type {
+  AutomationLabel,
+  CpsAutomationLog,
   CpsImprovement,
   CpsKpiDaily,
   CpsProcess,
@@ -22,6 +24,7 @@ export interface MockDb {
   improvements: CpsImprovement[];
   tasks: CpsTask[];
   kpi_daily: CpsKpiDaily[];
+  automation_logs: CpsAutomationLog[];
 }
 
 let counter = 1000;
@@ -131,10 +134,77 @@ function buildSeedDb(): MockDb {
 
   const kpi_daily: CpsKpiDaily[] = buildKpiHistory();
 
+  // 自動化区分の履歴（デモ）: 手作業→治具化→自動化 の遷移が見えるように。
+  // 製造工程は商品ラインごとに複数あるため、ウッドリング（メープルリング）ラインの
+  // 工程に履歴を紐づける。各工程の最新ラベルは seed の automation と一致する。
+  const autoSeeds: {
+    process: CpsProcess;
+    history: { label: AutomationLabel; note?: string; days: number }[];
+  }[] = [
+    {
+      process: findMfg('prod-maple-ring', '材料選定'),
+      history: [{ label: '手作業', days: 120 }],
+    },
+    {
+      process: findMfg('prod-maple-ring', '切断'),
+      history: [
+        { label: '手作業', days: 120 },
+        { label: '治具化', note: '長さ決めの治具を自作し寸法を安定化', days: 45 },
+      ],
+    },
+    {
+      process: findMfg('prod-maple-ring', 'CNC'),
+      history: [
+        { label: '手作業', days: 160 },
+        { label: '治具化', note: 'ワーク固定用の治具を導入', days: 95 },
+        { label: '自動化', note: 'CNCルーター導入で無人加工に', days: 30 },
+      ],
+    },
+    {
+      process: findMfg('prod-maple-ring', '研磨'),
+      history: [
+        { label: '手作業', days: 120 },
+        { label: '治具化', note: '研磨治具を導入し角度を固定（ムラ減）', days: 70 },
+      ],
+    },
+    {
+      process: findShared('動画生成'),
+      history: [
+        { label: '手作業', days: 60 },
+        { label: '自動化', note: 'AI生成に切替えて量産', days: 15 },
+      ],
+    },
+    {
+      process: findShared('発送'),
+      history: [
+        { label: '手作業', days: 100 },
+        { label: '外注', note: '集荷・発送代行に委託', days: 20 },
+      ],
+    },
+  ];
+
+  const automation_logs: CpsAutomationLog[] = autoSeeds.flatMap((s) =>
+    s.history.map((h) => ({
+      id: mockId('auto'),
+      process_id: s.process.id,
+      label: h.label,
+      note: h.note ?? null,
+      created_at: daysAgoISO(h.days, 11),
+    }))
+  );
+
   // products の updated_at を整える
   void ts;
 
-  return { processes, products, work_logs, improvements, tasks, kpi_daily };
+  return {
+    processes,
+    products,
+    work_logs,
+    improvements,
+    tasks,
+    kpi_daily,
+    automation_logs,
+  };
 
   function mkLog(
     process_id: string,
