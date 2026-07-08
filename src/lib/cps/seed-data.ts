@@ -76,6 +76,20 @@ export const manufacturingByCategory: CategoryManufacturing[] = [
   },
 ];
 
+// 開発フェーズ: 試作の分岐（route = 分岐A/B/C）を持つデモ。
+// 要件整理・設計確定は分岐共通（route = null）、試作は3ルートに枝分かれ。
+// 標準作業組合せ票を「分岐ごと」に組めることを示すためのサンプル。
+const developmentProcessSeeds: ProcessSeed[] = [
+  { id: 'p-dev-req', name: '要件整理', phase: '開発', sort_order: 1, standard_minutes: 30 },
+  { id: 'p-dev-a1', name: '試作A：木型製作', phase: '開発', sort_order: 2, standard_minutes: 60, route: '分岐A', tools: ['木型'] },
+  { id: 'p-dev-a2', name: '試作A：嵌合検証', phase: '開発', sort_order: 3, standard_minutes: 40, route: '分岐A' },
+  { id: 'p-dev-b1', name: '試作B：3Dプリント', phase: '開発', sort_order: 2, standard_minutes: 90, route: '分岐B', tools: ['3Dプリンター'] },
+  { id: 'p-dev-b2', name: '試作B：強度検証', phase: '開発', sort_order: 3, standard_minutes: 40, route: '分岐B' },
+  { id: 'p-dev-c1', name: '試作C：レジン試作', phase: '開発', sort_order: 2, standard_minutes: 80, route: '分岐C', tools: ['レジン'] },
+  { id: 'p-dev-c2', name: '試作C：透明度検証', phase: '開発', sort_order: 3, standard_minutes: 35, route: '分岐C' },
+  { id: 'p-dev-fix', name: '設計確定', phase: '開発', sort_order: 4, standard_minutes: 30 },
+];
+
 // 製造以外（コンテンツ・販売）は全カテゴリ共通の 1 本（route = null）。
 const sharedProcessSeeds: ProcessSeed[] = [
   // コンテンツ工程
@@ -109,6 +123,7 @@ const manufacturingProcessSeeds: ProcessSeed[] = manufacturingByCategory.flatMap
 
 // 仕様書 §12 の工程マスタ（製造はカテゴリ別、その他は共通）
 export const processSeeds: ProcessSeed[] = [
+  ...developmentProcessSeeds,
   ...manufacturingProcessSeeds,
   ...sharedProcessSeeds,
 ];

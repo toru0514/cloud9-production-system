@@ -671,13 +671,29 @@ export async function listKpiDaily(sinceDays = 30): Promise<CpsKpiDaily[]> {
  * 標準作業組合せ票 (work_combinations / work_elements)
  * ============================================================ */
 
+// Supabase で「テーブル/カラムが無い」系のエラーか判定（マイグレーション未実行時の保護）。
+function isMissingRelation(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  if (e.code === '42P01' || e.code === '42703' || e.code === 'PGRST205') {
+    return true;
+  }
+  return /does not exist|could not find the table|schema cache/i.test(
+    e.message ?? ''
+  );
+}
+
 export async function listWorkCombinations(): Promise<CpsWorkCombination[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabaseAdmin()
       .from('cps_work_combinations')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) throw error;
+    // テーブル未作成なら 500 で落とさず空一覧を返す（マイグレーション未実行時の保護）
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      throw error;
+    }
     return (data ?? []) as CpsWorkCombination[];
   }
   return [...getMockDb().work_combinations].sort((a, b) =>
@@ -694,7 +710,10 @@ async function listWorkElements(
       .select('*')
       .eq('combination_id', combinationId)
       .order('sort_order', { ascending: true });
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      throw error;
+    }
     return (data ?? []) as CpsWorkElement[];
   }
   return getMockDb()
@@ -712,7 +731,10 @@ export async function getWorkCombination(
       .select('*')
       .eq('id', id)
       .maybeSingle();
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelation(error)) return null;
+      throw error;
+    }
     combination = (data as CpsWorkCombination) ?? null;
   } else {
     combination =
@@ -735,6 +757,8 @@ export async function createWorkCombination(
     id: mockId('wc'),
     name: input.name,
     process_id: input.process_id ?? null,
+    phase: input.phase ?? null,
+    lane: input.lane ?? null,
     product_line: input.product_line ?? null,
     required_qty: input.required_qty ?? 1,
     operating_seconds: input.operating_seconds ?? 27600,

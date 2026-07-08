@@ -215,6 +215,8 @@ function buildSeedDb(): MockDb {
     id: 'wc-ring-sand',
     name: '研磨セル',
     process_id: sandProc.id,
+    phase: null,
+    lane: null,
     product_line: 'ウッドリング',
     required_qty: 700,
     operating_seconds: 27600, // 7時間40分

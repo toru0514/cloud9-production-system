@@ -125,7 +125,9 @@ export interface CpsTask {
 export interface CpsWorkCombination {
   id: string;
   name: string;
-  process_id: string | null; // 分解対象の工程（任意）
+  process_id: string | null; // 分解対象の工程（任意・単一工程の分解時）
+  phase: string | null; // フェーズ（開発/製造 等）。工程マスタから取り込んだ票で使う
+  lane: string | null; // 分岐(route) または 商品ライン(product_line)。null = 分岐なし/全体
   product_line: string | null; // 商品ライン（タクトはライン単位）
   required_qty: number; // 必要数（個/直）
   operating_seconds: number; // 稼働時間（秒/直）
