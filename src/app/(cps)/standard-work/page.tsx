@@ -49,13 +49,7 @@ export default async function StandardWorkPage() {
             対して組み合わせ、手待ち・歩行のムダを見える化する帳票です。
           </p>
         </div>
-        <CombinationForm
-          processes={processes.map((p) => ({
-            id: p.id,
-            name: p.name,
-            product_line: p.product_line,
-          }))}
-        />
+        <CombinationForm processes={processes} />
       </div>
 
       <Card>
@@ -72,7 +66,7 @@ export default async function StandardWorkPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>名称</TableHead>
-                  <TableHead>対象工程</TableHead>
+                  <TableHead>対象</TableHead>
                   <TableHead className="text-right">TT（秒）</TableHead>
                   <TableHead className="text-right">CT（秒）</TableHead>
                   <TableHead>判定</TableHead>
@@ -99,8 +93,16 @@ export default async function StandardWorkPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {c.process_id ? procName.get(c.process_id) ?? '—' : '—'}
-                        {c.product_line ? (
+                        {c.phase
+                          ? c.phase
+                          : c.process_id
+                            ? procName.get(c.process_id) ?? '—'
+                            : '—'}
+                        {c.lane ? (
+                          <Badge variant="outline" className="ml-2">
+                            {c.lane}
+                          </Badge>
+                        ) : c.product_line ? (
                           <Badge variant="outline" className="ml-2">
                             {c.product_line}
                           </Badge>

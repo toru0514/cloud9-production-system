@@ -10,16 +10,21 @@ export default async function CombinationDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const detail = await getWorkCombination(id);
+  const [detail, processes] = await Promise.all([
+    getWorkCombination(id),
+    listProcesses(),
+  ]);
   if (!detail) notFound();
 
-  let processName: string | null = null;
-  if (detail.combination.process_id) {
-    const processes = await listProcesses();
-    processName =
-      processes.find((p) => p.id === detail.combination.process_id)?.name ??
-      null;
-  }
+  const processName = detail.combination.process_id
+    ? processes.find((p) => p.id === detail.combination.process_id)?.name ?? null
+    : null;
 
-  return <CombinationEditor detail={detail} processName={processName} />;
+  return (
+    <CombinationEditor
+      detail={detail}
+      processName={processName}
+      processes={processes}
+    />
+  );
 }

@@ -22,9 +22,22 @@ import {
   fmtSec,
 } from '@/lib/cps/combination';
 import { CombinationChart } from '@/components/cps/CombinationChart';
+import {
+  elementsFromPhase,
+  laneNoun,
+  type ImportProcess,
+} from '@/lib/cps/combination-import';
 import type { CpsWorkCombinationDetail } from '@/types/cps';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowUp, ChevronLeft, Plus, Save, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  DownloadCloud,
+  Plus,
+  Save,
+  Trash2,
+} from 'lucide-react';
 
 interface DraftRow {
   key: string;
@@ -37,11 +50,14 @@ interface DraftRow {
 export function CombinationEditor({
   detail,
   processName,
+  processes = [],
 }: {
   detail: CpsWorkCombinationDetail;
   processName?: string | null;
+  processes?: ImportProcess[];
 }) {
   const router = useRouter();
+  const { phase, lane } = detail.combination;
 
   const [name, setName] = useState(detail.combination.name);
   const [qty, setQty] = useState(String(detail.combination.required_qty));
@@ -91,6 +107,33 @@ export function CombinationEditor({
       return copy;
     });
 
+  const reimport = () => {
+    if (!phase) return;
+    const imported = elementsFromPhase(processes, phase, lane);
+    if (imported.length === 0) {
+      toast.error('取り込める工程がありません');
+      return;
+    }
+    if (
+      rows.length > 0 &&
+      !window.confirm(
+        `${phase}${lane ? ` / ${lane}` : ''} の工程 ${imported.length} 件で作業要素を置き換えます。よろしいですか？`
+      )
+    ) {
+      return;
+    }
+    setRows(
+      imported.map((e) => ({
+        key: crypto.randomUUID(),
+        name: e.name,
+        manual_seconds: e.manual_seconds,
+        auto_seconds: e.auto_seconds,
+        walk_seconds: e.walk_seconds,
+      }))
+    );
+    toast.success(`${imported.length} 件の工程を取り込みました（未保存）`);
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -132,10 +175,33 @@ export function CombinationEditor({
         >
           <ChevronLeft className="size-4" /> 標準作業へ戻る
         </Link>
-        <Button onClick={save} disabled={saving}>
-          <Save className="size-4" /> {saving ? '保存中…' : '保存'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {phase && (
+            <Button variant="outline" onClick={reimport}>
+              <DownloadCloud className="size-4" /> 工程を取り込む
+            </Button>
+          )}
+          <Button onClick={save} disabled={saving}>
+            <Save className="size-4" /> {saving ? '保存中…' : '保存'}
+          </Button>
+        </div>
       </div>
+
+      {phase && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>フェーズ</span>
+          <Badge variant="secondary">{phase}</Badge>
+          {lane && (
+            <>
+              <span>{laneNoun(phase === '製造')}</span>
+              <Badge variant="secondary">{lane}</Badge>
+            </>
+          )}
+          <span className="text-xs">
+            ・「工程を取り込む」で最新の工程マスタから作業要素を入れ直せます
+          </span>
+        </div>
+      )}
 
       {/* ヘッダー（品番・工程・タクト算出） */}
       <Card>
