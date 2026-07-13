@@ -169,3 +169,71 @@ export function computeAutomationRates(
     outsource: labelRate(processes, OUTSOURCE_LABEL),
   };
 }
+
+export const UNSET_LABEL = '未設定';
+
+export interface DistItem {
+  label: string;
+  isUnset: boolean;
+  count: number;
+  minutes: number;
+  rate: number; // 工程数ベース 0..1（分母=全工程）
+  timeRate: number; // 工数ベース 0..1（分母=標準時間の総和）
+}
+
+// 全区分の内訳（合計100%）。未設定も1項目として含める。
+// 並び: 組込み(定義順) → カスタム(名前順) → 未設定。
+export function automationDistribution(processes: CpsProcess[]): {
+  total: number;
+  totalMinutes: number;
+  items: DistItem[];
+} {
+  const total = processes.length;
+  const totalMinutes = processes.reduce(
+    (a, p) => a + (p.standard_minutes ?? 0),
+    0
+  );
+  const counts = new Map<string, { c: number; m: number }>();
+  let unsetC = 0;
+  let unsetM = 0;
+  for (const p of processes) {
+    const min = p.standard_minutes ?? 0;
+    if (!p.automation) {
+      unsetC += 1;
+      unsetM += min;
+      continue;
+    }
+    const e = counts.get(p.automation) ?? { c: 0, m: 0 };
+    e.c += 1;
+    e.m += min;
+    counts.set(p.automation, e);
+  }
+  const ordered = [
+    ...BUILTIN_AUTOMATION_LABELS.filter((l) => counts.has(l)),
+    ...[...counts.keys()]
+      .filter((l) => !BUILTIN_AUTOMATION_LABELS.includes(l))
+      .sort((a, b) => a.localeCompare(b)),
+  ];
+  const items: DistItem[] = ordered.map((label) => {
+    const e = counts.get(label)!;
+    return {
+      label,
+      isUnset: false,
+      count: e.c,
+      minutes: e.m,
+      rate: total ? e.c / total : 0,
+      timeRate: totalMinutes ? e.m / totalMinutes : 0,
+    };
+  });
+  if (unsetC > 0) {
+    items.push({
+      label: UNSET_LABEL,
+      isUnset: true,
+      count: unsetC,
+      minutes: unsetM,
+      rate: total ? unsetC / total : 0,
+      timeRate: totalMinutes ? unsetM / totalMinutes : 0,
+    });
+  }
+  return { total, totalMinutes, items };
+}
