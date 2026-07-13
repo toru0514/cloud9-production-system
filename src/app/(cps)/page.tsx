@@ -10,6 +10,7 @@ import { KpiSummary } from '@/components/cps/KpiSummary';
 import { ProcessBoard } from '@/components/cps/ProcessBoard';
 import { ProcessEditForm } from '@/components/cps/ProcessEditForm';
 import { AutomationLabelManager } from '@/components/cps/AutomationLabelManager';
+import { AutomationSummary } from '@/components/cps/AutomationSummary';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Flame, Plus, Tags, Workflow } from 'lucide-react';
 
@@ -89,6 +90,11 @@ export default async function DashboardPage() {
           標準時間を超過している工程はまだありません（または実績が未記録）。
         </div>
       )}
+
+      {/* 自動化の進捗（アプリ化率・AI率・外注率） */}
+      <AutomationSummary
+        processes={dash.process_statuses.map((s) => s.process)}
+      />
 
       {/* 工程フローボード（編集可能） */}
       <Card>

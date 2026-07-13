@@ -1,7 +1,17 @@
 // 自動化区分（手作業/治具化/自動化/効率化検討済/外注 + ユーザー追加）の共有メタ。
 // ボードのチップ・ダイアログ・工程詳細で同じ配色/並びを使う。
-import type { AutomationLabel } from '@/types/cps';
-import { Hand, Wrench, Cpu, Lightbulb, Truck, Tag, type LucideIcon } from 'lucide-react';
+import type { AutomationLabel, CpsProcess } from '@/types/cps';
+import {
+  Hand,
+  Wrench,
+  Cpu,
+  AppWindow,
+  Sparkles,
+  Lightbulb,
+  Truck,
+  Tag,
+  type LucideIcon,
+} from 'lucide-react';
 
 export interface AutomationMeta {
   // カード上の小さなチップ用（route バッジと同系統の淡色）
@@ -18,9 +28,16 @@ export const BUILTIN_AUTOMATION_LABELS: AutomationLabel[] = [
   '手作業',
   '治具化',
   '自動化',
+  'アプリ化',
+  'AI',
   '効率化検討済',
   '外注',
 ];
+
+// 「率」を出す対象の区分（アプリ化率・AI率・外注率）。
+export const APP_LABEL = 'アプリ化';
+export const AI_LABEL = 'AI';
+export const OUTSOURCE_LABEL = '外注';
 
 const BUILTIN_META: Record<string, AutomationMeta> = {
   手作業: {
@@ -40,6 +57,18 @@ const BUILTIN_META: Record<string, AutomationMeta> = {
     solid: 'bg-emerald-600 text-white',
     icon: Cpu,
     desc: '機械・ソフトで自動処理',
+  },
+  アプリ化: {
+    chip: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
+    solid: 'bg-indigo-600 text-white',
+    icon: AppWindow,
+    desc: '専用アプリ・ツール化して省力化',
+  },
+  AI: {
+    chip: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    solid: 'bg-violet-600 text-white',
+    icon: Sparkles,
+    desc: 'AIに任せている状態',
   },
   効率化検討済: {
     chip: 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300',
@@ -91,4 +120,52 @@ export function isValidAutomationLabel(v: unknown): v is AutomationLabel {
   if (typeof v !== 'string') return false;
   const t = v.trim();
   return t.length > 0 && t.length <= MAX_AUTOMATION_LABEL_LEN;
+}
+
+/* ============================================================
+ * アプリ化率 / AI率 / 外注率 の算出
+ * ============================================================ */
+
+export interface LabelRate {
+  label: string;
+  count: number; // この区分の工程数
+  rate: number; // 工程数ベースの割合 0..1（分母 = 全工程数）
+  minutes: number; // この区分の標準時間合計（分）
+  timeRate: number; // 工数ベースの割合 0..1（分母 = 標準時間の総和）
+}
+
+export interface AutomationRates {
+  totalProcesses: number;
+  totalMinutes: number; // 標準時間が設定されている工程の合計（分）
+  app: LabelRate;
+  ai: LabelRate;
+  outsource: LabelRate;
+}
+
+export function labelRate(processes: CpsProcess[], label: string): LabelRate {
+  const total = processes.length || 1;
+  const totalMinutes =
+    processes.reduce((a, p) => a + (p.standard_minutes ?? 0), 0) || 1;
+  const matched = processes.filter((p) => p.automation === label);
+  const minutes = matched.reduce((a, p) => a + (p.standard_minutes ?? 0), 0);
+  return {
+    label,
+    count: matched.length,
+    rate: matched.length / total,
+    minutes,
+    timeRate: minutes / totalMinutes,
+  };
+}
+
+// アプリ化率・AI率・外注率をまとめて算出。
+export function computeAutomationRates(
+  processes: CpsProcess[]
+): AutomationRates {
+  return {
+    totalProcesses: processes.length,
+    totalMinutes: processes.reduce((a, p) => a + (p.standard_minutes ?? 0), 0),
+    app: labelRate(processes, APP_LABEL),
+    ai: labelRate(processes, AI_LABEL),
+    outsource: labelRate(processes, OUTSOURCE_LABEL),
+  };
 }
